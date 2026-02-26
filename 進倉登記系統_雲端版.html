@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>貨物進倉登記系統</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3450;
+  --accent:#4f9cf9;--accent2:#7c5cfc;--success:#22c55e;--warning:#f59e0b;--danger:#ef4444;
+  --text:#e8eaf0;--text2:#8b90a7;--text3:#5a5f7a;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(79,156,249,.025)1px,transparent 1px),linear-gradient(90deg,rgba(79,156,249,.025)1px,transparent 1px);
+  background-size:32px 32px;pointer-events:none;z-index:0;}
+
+/* TOAST */
+#toast{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;}
+.toast-msg{padding:10px 18px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.4);animation:slideUp .3s ease;pointer-events:none;}
+.toast-success{background:#1a3a2a;border:1px solid var(--success);color:var(--success);}
+.toast-error{background:#3a1a1a;border:1px solid var(--danger);color:var(--danger);}
+.toast-info{background:#1a2a3a;border:1px solid var(--accent);color:var(--accent);}
+@keyframes slideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+
+/* LOADING OVERLAY */
+#loading{position:fixed;inset:0;background:rgba(15,17,23,.85);z-index:2000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;}
+#loading.show{display:flex;}
+.spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:14px;color:var(--text2);}
+
+/* LOGIN */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:1000;display:flex;align-items:center;justify-content:center;}
+.login-box{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px 36px;width:400px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.6);}
+.login-logo{display:flex;align-items:center;gap:14px;margin-bottom:30px;}
+.login-logo-icon{width:50px;height:50px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:26px;}
+.login-logo h1{font-size:18px;font-weight:700;}
+.login-logo p{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-top:2px;}
+.lf{margin-bottom:16px;}
+.lf label{display:block;font-size:12px;color:var(--text2);margin-bottom:6px;font-weight:500;letter-spacing:.04em;}
+.lf input,.lf select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:11px 14px;font-size:14px;font-family:'Noto Sans TC',sans-serif;outline:none;transition:border-color .2s,box-shadow .2s;}
+.lf input:focus,.lf select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,156,249,.12);}
+.lf select option{background:var(--surface2);}
+.login-btn{width:100%;padding:12px;border-radius:10px;border:none;cursor:pointer;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;font-size:15px;font-weight:600;font-family:'Noto Sans TC',sans-serif;margin-top:6px;transition:opacity .2s,transform .2s;}
+.login-btn:hover{opacity:.9;transform:translateY(-1px);}
+.login-err{color:var(--danger);font-size:13px;margin-top:10px;text-align:center;min-height:18px;}
+.login-hint{font-size:11px;color:var(--text3);margin-top:16px;text-align:center;line-height:1.9;background:var(--surface2);border-radius:8px;padding:10px;}
+
+/* USER SELECT BUTTONS */
+.user-btn-grid{display:flex;flex-direction:column;gap:8px;}
+.user-select-btn{
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:12px 14px;cursor:pointer;
+  font-family:'Noto Sans TC',sans-serif;text-align:left;
+  transition:all .2s;width:100%;
+}
+.user-select-btn:hover{border-color:var(--accent);}
+.user-select-btn.selected{
+  border-color:var(--accent);
+  background:linear-gradient(135deg,rgba(79,156,249,.15),rgba(124,92,252,.15));
+}
+.usb-name{font-size:15px;font-weight:600;color:var(--text);}
+.usb-role{font-size:12px;color:var(--text2);}
+
+/* ROLE BADGE */
+.role-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;}
+.role-admin{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
+.role-supervisor{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);}
+.role-user{background:rgba(79,156,249,.15);color:var(--accent);border:1px solid rgba(79,156,249,.3);}
+
+/* MAIN */
+.app{max-width:1060px;margin:0 auto;padding:24px 16px;position:relative;z-index:1;}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;padding-bottom:20px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:12px;}
+.logo{display:flex;align-items:center;gap:12px;}
+.logo-icon{width:44px;height:44px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.logo-text h1{font-size:18px;font-weight:700;}
+.logo-text p{font-size:11px;color:var(--text2);font-family:'DM Mono',monospace;margin-top:2px;}
+.header-right{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+.stat{text-align:right;}
+.stat-num{font-size:22px;font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);line-height:1;}
+.stat-label{font-size:11px;color:var(--text2);margin-top:2px;}
+.user-info{display:flex;align-items:center;gap:10px;}
+.user-name{font-size:14px;font-weight:500;}
+.logout-btn{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;font-family:'Noto Sans TC',sans-serif;transition:all .2s;}
+.logout-btn:hover{border-color:var(--danger);color:var(--danger);}
+.sync-indicator{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--success);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* GROUPS */
+.section-title{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.groups-row{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px;}
+.group-chip{display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;transition:all .2s;color:var(--text2);}
+.group-chip:hover{border-color:var(--accent);color:var(--text);}
+.group-chip.active{background:linear-gradient(135deg,rgba(79,156,249,.2),rgba(124,92,252,.2));border-color:var(--accent);color:var(--accent);font-weight:500;}
+.chip-count{background:var(--surface2);border-radius:10px;padding:1px 6px;font-size:11px;font-family:'DM Mono',monospace;}
+.group-chip.active .chip-count{background:rgba(79,156,249,.2);}
+.chip-del{color:var(--text3);cursor:pointer;font-size:14px;line-height:1;}
+.chip-del:hover{color:var(--danger);}
+.btn-new-group{display:flex;align-items:center;gap:6px;background:transparent;border:1px dashed var(--border);border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;color:var(--text3);font-family:'Noto Sans TC',sans-serif;transition:all .2s;}
+.btn-new-group:hover{border-color:var(--accent);color:var(--accent);}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:20px;}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+.bar{width:3px;height:14px;border-radius:2px;}
+.bar-blue{background:linear-gradient(to bottom,var(--accent),var(--accent2));}
+.bar-green{background:linear-gradient(to bottom,var(--success),#16a34a);}
+
+/* FORM */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group.full{grid-column:1/-1;}
+label{font-size:11px;color:var(--text2);font-weight:500;letter-spacing:.04em;}
+input[type=text],input[type=number],input[type=datetime-local],select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:9px 12px;font-size:14px;font-family:'Noto Sans TC',sans-serif;transition:border-color .2s,box-shadow .2s;outline:none;width:100%;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,156,249,.12);}
+input::placeholder,textarea::placeholder{color:var(--text3);}
+textarea{resize:vertical;min-height:60px;}
+.cbm-display{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:14px;font-family:'DM Mono',monospace;color:var(--accent);}
+
+/* DIM TABLE */
+.dim-table-wrap{overflow-x:auto;}
+.dim-table{width:100%;border-collapse:collapse;font-size:13px;}
+.dim-table th{background:var(--surface2);color:var(--text2);font-size:11px;font-weight:500;padding:7px 8px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap;}
+.dim-table td{padding:5px 4px;border-bottom:1px solid rgba(46,52,80,.4);vertical-align:middle;}
+.dim-table input[type=number]{padding:6px 8px;font-size:13px;text-align:center;}
+.cbm-val{font-family:'DM Mono',monospace;color:var(--accent);font-size:13px;text-align:center;padding:0 8px;white-space:nowrap;}
+.dim-total-row{display:flex;align-items:center;justify-content:space-between;margin-top:10px;}
+.dim-total{font-family:'DM Mono',monospace;color:var(--success);font-size:14px;font-weight:600;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);border-radius:8px;padding:6px 14px;}
+.btn-add-dim{display:inline-flex;align-items:center;gap:5px;background:rgba(79,156,249,.1);border:1px solid rgba(79,156,249,.25);color:var(--accent);border-radius:7px;padding:6px 12px;font-size:13px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;}
+.btn-add-dim:hover{background:rgba(79,156,249,.2);}
+.btn-del-dim{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:2px 6px;}
+.btn-del-dim:hover{color:var(--danger);}
+
+/* PHOTO */
+.photo-zone{border:2px dashed var(--border);border-radius:10px;padding:18px;text-align:center;cursor:pointer;transition:all .2s;position:relative;}
+.photo-zone:hover{border-color:var(--accent);background:rgba(79,156,249,.04);}
+.photo-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.photo-zone-icon{font-size:26px;}
+.photo-zone-text{font-size:13px;color:var(--text2);margin-top:4px;}
+.photo-zone-sub{font-size:11px;color:var(--text3);}
+.photo-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.thumb-wrap{position:relative;width:70px;height:70px;border-radius:8px;overflow:hidden;border:1px solid var(--border);}
+.thumb-wrap img{width:100%;height:100%;object-fit:cover;}
+.thumb-del{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.75);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
+
+/* BUTTONS */
+.btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;}
+.btn{padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-family:'Noto Sans TC',sans-serif;font-weight:500;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;}
+.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 14px rgba(79,156,249,.3);}
+.btn-ghost{background:var(--surface2);color:var(--text2);border:1px solid var(--border);}
+.btn-ghost:hover{color:var(--text);background:var(--border);}
+.btn-success{background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.3);}
+.btn-success:hover{background:rgba(34,197,94,.25);}
+.btn-danger-sm{padding:4px 10px;border-radius:6px;font-size:12px;background:rgba(239,68,68,.1);color:var(--danger);border:1px solid rgba(239,68,68,.25);cursor:pointer;font-family:'Noto Sans TC',sans-serif;}
+.btn-edit-sm{padding:4px 10px;border-radius:6px;font-size:12px;background:rgba(245,158,11,.1);color:var(--warning);border:1px solid rgba(245,158,11,.25);cursor:pointer;font-family:'Noto Sans TC',sans-serif;}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;margin-top:4px;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--surface2);color:var(--text2);font-weight:500;padding:10px;text-align:center;border-bottom:1px solid var(--border);font-size:12px;white-space:nowrap;}
+td{padding:9px 10px;text-align:center;border-bottom:1px solid rgba(46,52,80,.5);vertical-align:middle;}
+tr:hover td{background:rgba(79,156,249,.04);}
+.cbm-cell{font-family:'DM Mono',monospace;color:var(--accent);}
+.summary-row td{font-weight:600;color:var(--success);font-family:'DM Mono',monospace;background:rgba(34,197,94,.05);border-top:1px solid rgba(34,197,94,.2);}
+.no-data{text-align:center;color:var(--text3);padding:40px;font-size:14px;}
+.img-cell img{width:40px;height:40px;object-fit:cover;border-radius:4px;cursor:pointer;}
+.img-count{font-size:11px;color:var(--text3);}
+.op-badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;background:rgba(124,92,252,.12);color:var(--accent2);border:1px solid rgba(124,92,252,.2);}
+.records-topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.search-input{background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:7px 12px;font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;width:200px;}
+.search-input:focus{border-color:var(--accent);}
+
+/* ADMIN */
+.admin-panel{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:16px 20px;margin-bottom:20px;}
+.admin-panel-title{font-size:12px;color:var(--danger);font-weight:600;letter-spacing:.06em;margin-bottom:12px;}
+.users-table{width:100%;border-collapse:collapse;font-size:13px;}
+.users-table th{background:rgba(239,68,68,.1);color:var(--text2);font-size:11px;padding:7px 10px;text-align:center;border-bottom:1px solid rgba(239,68,68,.2);}
+.users-table td{padding:8px 10px;text-align:center;border-bottom:1px solid rgba(46,52,80,.4);}
+
+/* LIGHTBOX */
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;}
+.lightbox.show{display:flex;}
+.lightbox img{max-width:90vw;max-height:85vh;border-radius:8px;}
+.lightbox-close{position:absolute;top:20px;right:24px;color:white;font-size:28px;cursor:pointer;background:none;border:none;}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade-in{animation:fadeIn .3s ease;}
+
+/* ── MOBILE BOTTOM NAV ── */
+#bottom-nav{display:none;}
+@media(max-width:768px){
+  /* bottom nav */
+  #bottom-nav{
+    display:flex;position:fixed;bottom:0;left:0;right:0;z-index:500;
+    background:var(--surface);border-top:1px solid var(--border);
+    padding:8px 0 calc(8px + env(safe-area-inset-bottom));
+  }
+  .bnav-item{
+    flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;color:var(--text3);cursor:pointer;
+    font-family:'Noto Sans TC',sans-serif;font-size:11px;padding:4px 0;
+    transition:color .2s;
+  }
+  .bnav-item.active{color:var(--accent);}
+  .bnav-item .bnav-icon{font-size:22px;line-height:1;}
+  /* FAB add button */
+  .bnav-fab{
+    flex:0 0 64px;display:flex;flex-direction:column;align-items:center;gap:3px;
+    background:none;border:none;cursor:pointer;font-family:'Noto Sans TC',sans-serif;
+    font-size:11px;color:white;padding:4px 0;position:relative;
+  }
+  .bnav-fab-circle{
+    width:52px;height:52px;border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:flex;align-items:center;justify-content:center;font-size:28px;
+    box-shadow:0 4px 16px rgba(79,156,249,.5);
+    position:absolute;top:-20px;
+  }
+  .bnav-fab span{margin-top:36px;color:var(--accent);font-size:11px;}
+
+  /* page views */
+  .app{padding:16px 12px 90px;}
+  .mobile-page{display:none;}
+  .mobile-page.active{display:block;}
+
+  /* header compact */
+  header{margin-bottom:16px;padding-bottom:14px;}
+  .logo-text h1{font-size:15px;}
+  .logo-text p{display:none;}
+  .logo-icon{width:36px;height:36px;font-size:18px;}
+  .header-right .stat{display:none;}
+  .sync-indicator span{display:none;}
+  .user-name{font-size:13px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .logout-btn{padding:5px 10px;font-size:11px;}
+
+  /* group chips: horizontal scroll */
+  .groups-row{flex-wrap:nowrap;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;}
+  .groups-row::-webkit-scrollbar{display:none;}
+  .group-chip{white-space:nowrap;flex-shrink:0;}
+
+  /* form: single column, bigger inputs */
+  .form-grid{grid-template-columns:1fr;}
+  .form-group.full{grid-column:1;}
+  label{font-size:13px;}
+  input[type=text],input[type=number],input[type=datetime-local],select,textarea{
+    padding:13px 14px;font-size:16px;border-radius:10px;
+  }
+  .cbm-display{padding:13px 14px;font-size:15px;}
+
+  /* dim table: bigger inputs */
+  .dim-table input[type=number]{padding:10px 6px;font-size:15px;}
+  .dim-table th{font-size:10px;padding:6px 4px;}
+  .btn-add-dim{padding:10px 16px;font-size:14px;}
+  .dim-total{font-size:15px;padding:8px 16px;}
+
+  /* photo zone bigger for thumb tap */
+  .photo-zone{padding:24px;}
+  .photo-zone-icon{font-size:36px;}
+  .photo-zone-text{font-size:15px;}
+  .thumb-wrap{width:80px;height:80px;}
+
+  /* buttons full-width */
+  .btn-row{flex-direction:column-reverse;}
+  .btn-row .btn{width:100%;justify-content:center;padding:14px;}
+  .card{padding:16px;}
+  .card-title{font-size:13px;}
+
+  /* records: card layout instead of table */
+  .table-wrap table{display:none;}
+  .mobile-cards{display:block;}
+  .entry-card{
+    background:var(--surface2);border:1px solid var(--border);border-radius:12px;
+    padding:14px;margin-bottom:10px;
+  }
+  .entry-card-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;}
+  .entry-card-name{font-size:16px;font-weight:700;}
+  .entry-card-date{font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px;}
+  .entry-card-body{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;}
+  .entry-field{display:flex;flex-direction:column;gap:2px;}
+  .entry-field-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;}
+  .entry-field-val{font-size:14px;}
+  .entry-field-val.mono{font-family:'DM Mono',monospace;color:var(--accent);}
+  .entry-card-dims{margin-bottom:8px;font-size:12px;color:var(--text2);}
+  .entry-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+  .entry-card-ops{display:flex;gap:8px;}
+  .btn-edit-sm,.btn-danger-sm{padding:8px 16px;font-size:13px;}
+  .entry-card-meta{font-size:11px;color:var(--text3);}
+  .entry-photos{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+  .entry-photos img{width:64px;height:64px;object-fit:cover;border-radius:8px;cursor:pointer;}
+  /* summary bar */
+  .mobile-summary{
+    background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);
+    border-radius:10px;padding:12px 16px;margin-bottom:12px;
+    display:flex;justify-content:space-around;
+  }
+  .mobile-sum-item{text-align:center;}
+  .mobile-sum-val{font-family:'DM Mono',monospace;color:var(--success);font-size:16px;font-weight:700;}
+  .mobile-sum-label{font-size:11px;color:var(--text3);margin-top:2px;}
+  /* search */
+  .search-input{width:100%;}
+  .records-topbar{flex-direction:column;align-items:stretch;}
+  .records-topbar>div{width:100%;}
+  /* section title */
+  .section-title{font-size:12px;}
+  /* admin panel */
+  .admin-panel{padding:12px;}
+  .users-table{font-size:12px;}
+}
+/* desktop: hide mobile cards */
+@media(min-width:769px){
+  .mobile-cards{display:none;}
+  .mobile-page{display:block !important;}
+  #bottom-nav{display:none !important;}
+}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+<div id="loading"><div class="spinner"></div><div class="loading-text" id="loading-text">載入中...</div></div>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon">📦</div>
+      <div>
+        <h1>貨物進倉登記系統</h1>
+        <p>WAREHOUSE INTAKE MANAGEMENT</p>
+      </div>
+    </div>
+    <div class="lf">
+      <label>👤 選擇帳號</label>
+      <div id="login-user-btns" class="user-btn-grid"></div>
+    </div>
+    <div class="lf">
+      <label>🔒 密碼</label>
+      <input type="password" id="login-pw" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()">
+    </div>
+    <button class="login-btn" onclick="doLogin()">登入</button>
+    <div class="login-err" id="login-err"></div>
+    <div class="login-hint" id="login-hint"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="main-app" style="display:none;">
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📦</div>
+      <div class="logo-text">
+        <h1>貨物進倉登記系統</h1>
+        <p>WAREHOUSE INTAKE MANAGEMENT</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="sync-indicator"><div class="sync-dot"></div><span>雲端同步</span></div>
+      <div class="stat"><div class="stat-num" id="total-groups">0</div><div class="stat-label">群組數</div></div>
+      <div class="stat"><div class="stat-num" id="total-records">0</div><div class="stat-label">進倉筆數</div></div>
+      <div class="user-info">
+        <span class="user-name" id="header-username"></span>
+        <span id="header-role-badge"></span>
+        <button class="logout-btn" onclick="doLogout()">登出</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- PAGE: 群組 -->
+  <div class="mobile-page active" id="page-groups">
+    <!-- Admin Panel -->
+    <div id="admin-panel" style="display:none;">
+      <div class="section-title">管理員設定</div>
+      <div class="admin-panel">
+        <div class="admin-panel-title">🔧 帳號管理（資料儲存於瀏覽器，各裝置獨立）</div>
+        <table class="users-table">
+          <thead><tr><th>帳號名稱</th><th>角色</th><th>操作</th></tr></thead>
+          <tbody id="users-tbody"></tbody>
+        </table>
+        <div style="margin-top:12px;">
+          <button class="btn btn-ghost" style="font-size:13px;" onclick="addUserPrompt()">＋ 新增帳號</button>
+        </div>
+      </div>
+    </div>
+    <!-- Groups -->
+    <div class="section-title">群組管理</div>
+    <div class="groups-row" id="groups-row"></div>
+    <div id="no-group-hint" style="text-align:center;color:var(--text3);padding:60px 0;font-size:15px;">
+      ← 請先選擇或新增一個群組
+    </div>
+  </div>
+
+  <!-- PAGE: 新增記錄 -->
+  <div class="mobile-page" id="page-form">
+    <div id="form-area" style="display:none;" class="fade-in">
+      <div class="card">
+        <div class="card-title"><span class="bar bar-blue"></span><span id="form-title">新增進倉記錄</span></div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>📅 入倉日期與時間</label>
+            <input type="datetime-local" id="f-datetime">
+          </div>
+          <div class="form-group">
+            <label>🏷 貨物名稱 / 品項 <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="f-name" placeholder="請輸入貨物名稱">
+          </div>
+          <div class="form-group">
+            <label>🏭 供應商 / 來源</label>
+            <input type="text" id="f-supplier" placeholder="供應商名稱">
+          </div>
+          <div class="form-group">
+            <label>🔢 總件數</label>
+            <input type="number" id="f-count" placeholder="件數" min="0">
+          </div>
+          <div class="form-group">
+            <label>⚖️ 總重 (kg)</label>
+            <input type="number" id="f-gross" placeholder="0.000" step="0.001" oninput="calcNet()">
+          </div>
+          <div class="form-group">
+            <label>🪵 板重 (kg)</label>
+            <input type="number" id="f-tare" placeholder="0.000" step="0.001" oninput="calcNet()">
+          </div>
+          <div class="form-group">
+            <label>📊 淨重 (kg)（自動計算）</label>
+            <div class="cbm-display" id="net-display">—</div>
+          </div>
+          <div class="form-group full">
+            <label>📐 材積明細 — 長×寬×高 (cm) × 件數</label>
+            <div class="dim-table-wrap">
+              <table class="dim-table">
+                <thead><tr><th>#</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>件數</th><th>單箱CBM</th><th>小計</th><th></th></tr></thead>
+                <tbody id="dim-tbody"></tbody>
+              </table>
+            </div>
+            <div class="dim-total-row">
+              <button class="btn-add-dim" onclick="addDimRow()">＋ 新增尺寸</button>
+              <div class="dim-total" id="cbm-total">總 CBM：— m³</div>
+            </div>
+          </div>
+          <div class="form-group full">
+            <label>📝 備註</label>
+            <textarea id="f-notes" placeholder="備註事項..."></textarea>
+          </div>
+          <div class="form-group full">
+            <label>📷 拍照 / 上傳圖片</label>
+            <div class="photo-zone">
+              <input type="file" id="f-photos" accept="image/*" capture="environment" multiple onchange="handlePhotos(event)">
+              <div class="photo-zone-icon">📷</div>
+              <div class="photo-zone-text">點擊拍照或選擇圖片</div>
+              <div class="photo-zone-sub">手機可直接開啟相機</div>
+            </div>
+            <div class="photo-thumbs" id="photo-thumbs"></div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="cancelEdit()">取消</button>
+          <button class="btn btn-primary" id="submit-btn" onclick="submitEntry()">📌 建立記錄</button>
+        </div>
+      </div>
+    </div>
+    <div id="form-no-group" style="text-align:center;color:var(--text3);padding:60px 0;font-size:15px;display:none;">
+      請先到「群組」頁面選擇群組
+    </div>
+  </div>
+
+  <!-- PAGE: 查看記錄 -->
+  <div class="mobile-page" id="page-records">
+    <div id="records-area" style="display:none;" class="fade-in">
+      <div class="card fade-in">
+        <div class="records-topbar">
+          <div class="card-title" style="margin-bottom:0;">
+            <span class="bar bar-green"></span>
+            <span id="table-title">進倉記錄</span>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;width:100%;">
+            <input class="search-input" type="text" id="search-input" placeholder="🔍 搜尋貨物名稱、供應商..." oninput="renderTable()">
+            <div style="display:flex;gap:8px;width:100%;">
+              <button class="btn btn-ghost" onclick="loadEntries(currentGroup.id)" style="font-size:13px;flex:1;">🔄 重新整理</button>
+              <button class="btn btn-success" id="btn-export" onclick="exportExcel()" style="display:none;flex:1;">⬇ 匯出</button>
+              <button class="btn btn-ghost" onclick="printTable()" style="flex:1;">🖨 列印</button>
+            </div>
+          </div>
+        </div>
+        <!-- Mobile card list (hidden on desktop) -->
+        <div class="mobile-summary" id="mobile-summary" style="display:none;"></div>
+        <div class="mobile-cards" id="mobile-cards"></div>
+        <!-- Desktop table (hidden on mobile) -->
+        <div class="table-wrap" id="table-wrap"></div>
+      </div>
+    </div>
+    <div id="records-no-group" style="text-align:center;color:var(--text3);padding:60px 0;font-size:15px;display:none;">
+      請先到「群組」頁面選擇群組
+    </div>
+  </div>
+
+</div><!-- end .app -->
+
+<!-- BOTTOM NAV (mobile only) -->
+<div id="bottom-nav">
+  <button class="bnav-item active" id="bnav-groups" onclick="switchPage('groups')">
+    <span class="bnav-icon">📁</span>
+    <span>群組</span>
+  </button>
+  <button class="bnav-item" id="bnav-records" onclick="switchPage('records')">
+    <span class="bnav-icon">📋</span>
+    <span>記錄</span>
+  </button>
+  <button class="bnav-fab" onclick="switchPage('form')">
+    <div class="bnav-fab-circle">＋</div>
+    <span>新增</span>
+  </button>
+  <button class="bnav-item" id="bnav-export" onclick="exportExcel()" style="display:none;">
+    <span class="bnav-icon">⬇</span>
+    <span>匯出</span>
+  </button>
+  <button class="bnav-item" id="bnav-logout" onclick="doLogout()">
+    <span class="bnav-icon">👤</span>
+    <span>登出</span>
+  </button>
+</div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<script>
+// ══════════════════════════════════════════
+//  MOBILE PAGE SWITCHING
+// ══════════════════════════════════════════
+function switchPage(page){
+  ["groups","form","records"].forEach(p=>{
+    const el=document.getElementById("page-"+p);
+    if(el) el.classList.toggle("active", p===page);
+    const btn=document.getElementById("bnav-"+p);
+    if(btn) btn.classList.toggle("active", p===page);
+  });
+  // show/hide form vs no-group hint
+  if(page==="form"){
+    if(currentGroup){
+      document.getElementById("form-area").style.display="block";
+      document.getElementById("form-no-group").style.display="none";
+    } else {
+      document.getElementById("form-area").style.display="none";
+      document.getElementById("form-no-group").style.display="block";
+    }
+  }
+  if(page==="records"){
+    if(currentGroup){
+      document.getElementById("records-area").style.display="block";
+      document.getElementById("records-no-group").style.display="none";
+    } else {
+      document.getElementById("records-area").style.display="none";
+      document.getElementById("records-no-group").style.display="block";
+    }
+  }
+}
+
+
+const SUPABASE_URL  = "https://vpctitsrrqdadhpcjgmy.supabase.co";
+const SUPABASE_ANON = "sb_publishable_Td7tYn4w5tPBcKQEce85yA_THx70WjF";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// ══════════════════════════════════════════
+//  USERS (stored in localStorage per device)
+// ══════════════════════════════════════════
+const DEFAULT_USERS = [
+  {name:"管理員", role:"admin",      pw:"admin123"},
+  {name:"主管A",  role:"supervisor", pw:"super123"},
+  {name:"員工甲", role:"user",       pw:"user123"},
+  {name:"員工乙", role:"user",       pw:"user456"},
+];
+const loadUsers = ()=> {
+  try { return JSON.parse(localStorage.getItem("wms_users")||"null") || DEFAULT_USERS; }
+  catch(e) { return DEFAULT_USERS; }
+};
+const saveUsers = u => { try { localStorage.setItem("wms_users", JSON.stringify(u)); } catch(e){} };
+
+// ══════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════
+let currentUser  = null;
+let groups       = [];
+let currentGroup = null;
+let entries      = [];
+let editingId    = null;
+let pendingPhotos= [];
+let lastName     = "";
+let dimRows      = [];
+
+// ══════════════════════════════════════════
+//  UI HELPERS
+// ══════════════════════════════════════════
+function showLoading(txt="處理中..."){
+  document.getElementById("loading-text").textContent=txt;
+  document.getElementById("loading").classList.add("show");
+}
+function hideLoading(){ document.getElementById("loading").classList.remove("show"); }
+
+function toast(msg, type="info"){
+  const el=document.createElement("div");
+  el.className=`toast-msg toast-${type}`;
+  el.textContent=msg;
+  document.getElementById("toast").appendChild(el);
+  setTimeout(()=>el.remove(), 3000);
+}
+
+// ══════════════════════════════════════════
+//  ROLE HELPERS
+// ══════════════════════════════════════════
+const can = {
+  editEntry:  ()=> currentUser && ["admin","supervisor"].includes(currentUser.role),
+  deleteEntry:()=> currentUser && currentUser.role==="admin",
+  addGroup:   ()=> currentUser && currentUser.role==="admin",
+  deleteGroup:()=> currentUser && currentUser.role==="admin",
+  exportExcel:()=> currentUser && ["admin","supervisor"].includes(currentUser.role),
+  manageUsers:()=> currentUser && currentUser.role==="admin",
+};
+
+function roleBadgeHTML(role){
+  const map={admin:["管理員","role-admin","🔑"],supervisor:["主管","role-supervisor","📋"],user:["一般使用者","role-user","👤"]};
+  const [label,cls,icon]=map[role]||["未知","role-user","👤"];
+  return `<span class="role-badge ${cls}">${icon} ${label}</span>`;
+}
+
+// ══════════════════════════════════════════
+//  LOGIN
+// ══════════════════════════════════════════
+let selectedLoginUser = null; // 直接用變數記錄選中的帳號
+
+function initLoginScreen(){
+  let users;
+  try { users = loadUsers(); } catch(e) { users = DEFAULT_USERS; }
+
+  selectedLoginUser = users[0] || null; // 預設選第一個
+
+  const btnArea = document.getElementById("login-user-btns");
+  if(btnArea){
+    btnArea.innerHTML = users.map((u, i) => {
+      const roleLabel = {admin:"🔑 管理員", supervisor:"📋 主管", user:"👤 一般使用者"}[u.role] || u.role;
+      return `<button type="button" class="user-select-btn${i===0?" selected":""}" onclick="selectUserBtn(this, ${i})">
+        <span class="usb-name">${u.name}</span>
+        <span class="usb-role">${roleLabel}</span>
+      </button>`;
+    }).join("");
+  }
+
+  document.getElementById("login-hint").innerHTML =
+    users.map(u => `<b>${u.name}</b> 密碼：${u.pw}`).join("<br>");
+}
+
+function selectUserBtn(btn, index){
+  const users = loadUsers();
+  document.querySelectorAll(".user-select-btn").forEach(b => b.classList.remove("selected"));
+  btn.classList.add("selected");
+  selectedLoginUser = users[index] || null;
+  // 清除錯誤訊息
+  document.getElementById("login-err").textContent = "";
+}
+
+function doLogin(){
+  if(!selectedLoginUser){ document.getElementById("login-err").textContent="❌ 請先選擇帳號"; return; }
+  const pw = document.getElementById("login-pw").value;
+  if(selectedLoginUser.pw !== pw){
+    document.getElementById("login-err").textContent="❌ 密碼錯誤，請再試一次";
+    return;
+  }
+  currentUser = { name: selectedLoginUser.name, role: selectedLoginUser.role };
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("main-app").style.display="block";
+  document.getElementById("login-pw").value="";
+  document.getElementById("login-err").textContent="";
+  onAfterLogin();
+}
+
+function doLogout(){
+  currentUser=null; currentGroup=null; entries=[];
+  selectedLoginUser=null;
+  document.getElementById("main-app").style.display="none";
+  document.getElementById("login-screen").style.display="flex";
+  document.getElementById("login-pw").value="";
+  initLoginScreen();
+}
+
+async function onAfterLogin(){
+  document.getElementById("header-username").textContent=currentUser.name;
+  document.getElementById("header-role-badge").innerHTML=roleBadgeHTML(currentUser.role);
+  document.getElementById("btn-export").style.display=can.exportExcel()?"":"none";
+  const bnavExport=document.getElementById("bnav-export");
+  if(bnavExport) bnavExport.style.display=can.exportExcel()?"":"none";
+  document.getElementById("admin-panel").style.display=can.manageUsers()?"":"none";
+  if(can.manageUsers()) renderUsersTable();
+  document.getElementById("form-area").style.display="none";
+  document.getElementById("records-area") && (document.getElementById("records-area").style.display="none");
+  document.getElementById("no-group-hint") && (document.getElementById("no-group-hint").style.display="block");
+  await loadGroups();
+}
+
+// ══════════════════════════════════════════
+//  ADMIN: USER MANAGEMENT
+// ══════════════════════════════════════════
+function renderUsersTable(){
+  const users=loadUsers();
+  document.getElementById("users-tbody").innerHTML=users.map((u,i)=>`
+    <tr>
+      <td>${u.name}</td>
+      <td>${roleBadgeHTML(u.role)}</td>
+      <td>
+        <button class="btn-edit-sm" onclick="editUserPrompt(${i})">修改密碼</button>
+        ${i>0?`<button class="btn-danger-sm" onclick="deleteUser(${i})">刪除</button>`:""}
+      </td>
+    </tr>`).join("");
+}
+function addUserPrompt(){
+  const name=prompt("新帳號名稱："); if(!name?.trim()) return;
+  const role=prompt("角色（admin / supervisor / user）：","user");
+  if(!["admin","supervisor","user"].includes(role)) return alert("角色無效");
+  const pw=prompt("設定密碼："); if(!pw) return;
+  const users=loadUsers();
+  if(users.find(u=>u.name===name.trim())) return alert("帳號已存在");
+  users.push({name:name.trim(),role,pw}); saveUsers(users);
+  renderUsersTable(); initLoginScreen();
+  toast("帳號已新增","success");
+}
+function editUserPrompt(i){
+  const users=loadUsers();
+  const pw=prompt(`修改「${users[i].name}」的密碼：`); if(!pw) return;
+  users[i].pw=pw; saveUsers(users); renderUsersTable();
+  toast("密碼已更新","success");
+}
+function deleteUser(i){
+  const users=loadUsers();
+  if(!confirm(`確定刪除帳號「${users[i].name}」？`)) return;
+  users.splice(i,1); saveUsers(users); renderUsersTable(); initLoginScreen();
+  toast("帳號已刪除","info");
+}
+
+// ══════════════════════════════════════════
+//  SUPABASE: GROUPS
+// ══════════════════════════════════════════
+async function loadGroups(){
+  showLoading("載入群組...");
+  const {data,error}=await sb.from("groups").select("*").order("created_at");
+  hideLoading();
+  if(error){ toast("載入群組失敗："+error.message,"error"); return; }
+  groups=data||[];
+  renderGroups();
+  updateHeaderStats();
+}
+
+async function createGroup(){
+  const name=prompt("輸入群組名稱（例：2025-06 進倉）：");
+  if(!name?.trim()) return;
+  showLoading("建立群組...");
+  const {data,error}=await sb.from("groups").insert({name:name.trim()}).select().single();
+  hideLoading();
+  if(error){ toast("建立失敗："+error.message,"error"); return; }
+  groups.push(data);
+  renderGroups(); updateHeaderStats();
+  toast(`群組「${name.trim()}」已建立`,"success");
+  selectGroup(data);
+}
+
+async function deleteGroup(id,name){
+  if(!confirm(`確定刪除群組「${name}」？所有記錄將一併刪除。`)) return;
+  showLoading("刪除群組...");
+  const {error}=await sb.from("groups").delete().eq("id",id);
+  hideLoading();
+  if(error){ toast("刪除失敗："+error.message,"error"); return; }
+  groups=groups.filter(g=>g.id!==id);
+  if(currentGroup?.id===id){
+    currentGroup=null; entries=[];
+    document.getElementById("form-area").style.display="none";
+    document.getElementById("no-group-hint").style.display="block";
+  }
+  renderGroups(); updateHeaderStats();
+  toast(`群組「${name}」已刪除`,"info");
+}
+
+function renderGroups(){
+  const row=document.getElementById("groups-row");
+  row.innerHTML="";
+  if(can.addGroup()){
+    const btn=document.createElement("button");
+    btn.className="btn-new-group"; btn.textContent="＋ 新增群組";
+    btn.onclick=createGroup; row.appendChild(btn);
+  }
+  groups.forEach(g=>{
+    const chip=document.createElement("div");
+    chip.className="group-chip"+(currentGroup?.id===g.id?" active":"");
+    const entryCount=g.entry_count||"";
+    chip.innerHTML=`<span onclick="selectGroup(${JSON.stringify(g).replace(/"/g,'&quot;')})">📁 ${g.name}</span>
+      <span class="chip-count" id="chip-cnt-${g.id}">…</span>
+      ${can.deleteGroup()?`<span class="chip-del" onclick="event.stopPropagation();deleteGroup('${g.id}','${g.name.replace(/'/g,"\\'")}')">✕</span>`:""}`;
+    row.appendChild(chip);
+  });
+  // load counts
+  groups.forEach(async g=>{
+    const {count}=await sb.from("entries").select("*",{count:"exact",head:true}).eq("group_id",g.id);
+    const el=document.getElementById("chip-cnt-"+g.id);
+    if(el) el.textContent=count||0;
+  });
+}
+
+function selectGroup(g){
+  if(typeof g==="string") g=groups.find(x=>x.id===g);
+  currentGroup=g; editingId=null; pendingPhotos=[];
+  // show form area
+  document.getElementById("form-area").style.display="block";
+  document.getElementById("form-no-group") && (document.getElementById("form-no-group").style.display="none");
+  document.getElementById("records-area") && (document.getElementById("records-area").style.display="block");
+  document.getElementById("records-no-group") && (document.getElementById("records-no-group").style.display="none");
+  document.getElementById("no-group-hint") && (document.getElementById("no-group-hint").style.display="none");
+  document.getElementById("table-title").textContent=`${g.name} — 進倉記錄`;
+  document.getElementById("form-title").textContent="新增進倉記錄";
+  document.getElementById("submit-btn").textContent="📌 建立記錄";
+  resetForm(); renderGroups(); loadEntries(g.id);
+  // on mobile, go to records page after selecting group
+  if(window.innerWidth<=768) switchPage("records");
+}
+
+// ══════════════════════════════════════════
+//  SUPABASE: ENTRIES
+// ══════════════════════════════════════════
+async function loadEntries(groupId){
+  showLoading("載入記錄...");
+  const {data,error}=await sb.from("entries").select("*").eq("group_id",groupId).order("created_at");
+  hideLoading();
+  if(error){ toast("載入失敗："+error.message,"error"); return; }
+  entries=data||[];
+  renderTable();
+  updateHeaderStats();
+}
+
+async function submitEntry(){
+  const d=getFormData();
+  if(!d.名稱) return alert("請輸入貨物名稱！");
+  lastName=d.名稱;
+  showLoading(editingId?"更新記錄...":"儲存記錄...");
+
+  if(editingId){
+    if(!can.editEntry()){ hideLoading(); return alert("您沒有修改權限"); }
+    const old=entries.find(e=>e.id===editingId);
+    const modLog=[...(old?.修改紀錄||[]),{操作者:currentUser.name,時間:new Date().toLocaleString("zh-TW"),動作:"修改"}];
+    const payload={...d, 建立者:old?.建立者||currentUser.name, 修改紀錄:modLog, updated_at:new Date().toISOString()};
+    if(pendingPhotos.length===0) payload.photos=old?.photos||[];
+    const {error}=await sb.from("entries").update(payload).eq("id",editingId);
+    hideLoading();
+    if(error){ toast("更新失敗："+error.message,"error"); return; }
+    toast("記錄已更新","success");
+    editingId=null;
+    document.getElementById("form-title").textContent="新增進倉記錄";
+    document.getElementById("submit-btn").textContent="📌 建立記錄";
+  } else {
+    const payload={...d, group_id:currentGroup.id, group_name:currentGroup.name, 建立者:currentUser.name, 修改紀錄:[]};
+    const {error}=await sb.from("entries").insert(payload);
+    hideLoading();
+    if(error){ toast("儲存失敗："+error.message,"error"); return; }
+    toast("記錄已儲存 ✓","success");
+  }
+  resetForm();
+  await loadEntries(currentGroup.id);
+}
+
+async function deleteEntry(id, name){
+  if(!can.deleteEntry()) return alert("您沒有刪除權限");
+  if(!confirm(`確定刪除「${name}」？此操作無法復原。`)) return;
+  showLoading("刪除中...");
+  const {error}=await sb.from("entries").delete().eq("id",id);
+  hideLoading();
+  if(error){ toast("刪除失敗："+error.message,"error"); return; }
+  toast("已刪除","info");
+  await loadEntries(currentGroup.id);
+}
+
+function editEntry(id){
+  if(!can.editEntry()) return alert("您沒有修改權限");
+  const e=entries.find(x=>x.id===id);
+  if(!e) return;
+  editingId=id;
+  document.getElementById("f-datetime").value=(e.日期時間||"").replace(" ","T");
+  document.getElementById("f-name").value=e.名稱||"";
+  document.getElementById("f-supplier").value=e.供應商||"";
+  document.getElementById("f-count").value=e.件數||"";
+  document.getElementById("f-gross").value=e.總重||"";
+  document.getElementById("f-tare").value=e.板重||"";
+  document.getElementById("f-notes").value=e.備註||"";
+  dimRows=(e.dims?.length>0)?e.dims.map(d=>({len:d.len||"",wid:d.wid||"",hei:d.hei||"",qty:d.qty||1})):[{len:"",wid:"",hei:"",qty:1}];
+  renderDimTable();
+  pendingPhotos=[...(e.photos||[])];
+  renderThumbs(); calcNet();
+  document.getElementById("form-title").textContent=`編輯記錄：${e.名稱}`;
+  document.getElementById("submit-btn").textContent="✔ 更新記錄";
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+// ══════════════════════════════════════════
+//  FORM HELPERS
+// ══════════════════════════════════════════
+function nowStr(){
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function resetForm(){
+  document.getElementById("f-datetime").value=nowStr();
+  ["f-name","f-supplier","f-count","f-gross","f-tare","f-notes"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("f-name").value=lastName;
+  document.getElementById("net-display").textContent="—";
+  dimRows=[]; addDimRow(); pendingPhotos=[]; renderThumbs();
+}
+function cancelEdit(){ editingId=null; document.getElementById("form-title").textContent="新增進倉記錄"; document.getElementById("submit-btn").textContent="📌 建立記錄"; resetForm(); }
+function calcNet(){
+  const g=parseFloat(document.getElementById("f-gross").value)||0;
+  const t=parseFloat(document.getElementById("f-tare").value)||0;
+  document.getElementById("net-display").textContent=(g||t)?`${+(g-t).toFixed(4)} kg`:"—";
+}
+function getFormData(){
+  const 總重=parseFloat(document.getElementById("f-gross").value)||0;
+  const 板重=parseFloat(document.getElementById("f-tare").value)||0;
+  return {
+    日期時間: document.getElementById("f-datetime").value.replace("T"," "),
+    名稱:    document.getElementById("f-name").value.trim(),
+    供應商:  document.getElementById("f-supplier").value.trim(),
+    件數:    document.getElementById("f-count").value,
+    總重, 板重, 淨重:+(總重-板重).toFixed(4),
+    dims: dimRows.map(r=>({len:parseFloat(r.len)||0,wid:parseFloat(r.wid)||0,hei:parseFloat(r.hei)||0,qty:parseInt(r.qty)||0})),
+    cbm: +getTotalCBM().toFixed(6),
+    備註:    document.getElementById("f-notes").value.trim(),
+    photos:  [...pendingPhotos],
+  };
+}
+
+// DIM TABLE
+function addDimRow(len="",wid="",hei="",qty=1){ dimRows.push({len,wid,hei,qty}); renderDimTable(); }
+function removeDimRow(i){ dimRows.splice(i,1); renderDimTable(); }
+function renderDimTable(){
+  document.getElementById("dim-tbody").innerHTML=dimRows.map((r,i)=>{
+    const l=parseFloat(r.len)||0,w=parseFloat(r.wid)||0,h=parseFloat(r.hei)||0,q=parseInt(r.qty)||0;
+    const single=(l&&w&&h)?+((l*w*h)/1e6).toFixed(6):null;
+    const sub=(single&&q)?+(single*q).toFixed(6):null;
+    return `<tr>
+      <td style="color:var(--text3);font-size:12px;padding:5px 6px;">${i+1}</td>
+      <td><input type="number" placeholder="長" step="0.1" value="${r.len}" oninput="dimRows[${i}].len=this.value;renderDimTable()"></td>
+      <td><input type="number" placeholder="寬" step="0.1" value="${r.wid}" oninput="dimRows[${i}].wid=this.value;renderDimTable()"></td>
+      <td><input type="number" placeholder="高" step="0.1" value="${r.hei}" oninput="dimRows[${i}].hei=this.value;renderDimTable()"></td>
+      <td><input type="number" placeholder="1" min="1" step="1" value="${r.qty}" oninput="dimRows[${i}].qty=this.value;renderDimTable()"></td>
+      <td class="cbm-val">${single!==null?single:"—"}</td>
+      <td class="cbm-val" style="color:var(--success);">${sub!==null?sub:"—"}</td>
+      <td><button class="btn-del-dim" onclick="removeDimRow(${i})">✕</button></td>
+    </tr>`;
+  }).join("");
+  updateCBMTotal();
+}
+function updateCBMTotal(){
+  const t=dimRows.reduce((s,r)=>{
+    const l=parseFloat(r.len)||0,w=parseFloat(r.wid)||0,h=parseFloat(r.hei)||0,q=parseInt(r.qty)||0;
+    return s+(l&&w&&h&&q?(l*w*h/1e6)*q:0);
+  },0);
+  const el=document.getElementById("cbm-total");
+  if(el) el.textContent=dimRows.length?`總 CBM：${t.toFixed(6)} m³`:"總 CBM：— m³";
+  return t;
+}
+function getTotalCBM(){ return updateCBMTotal(); }
+
+// PHOTOS
+function handlePhotos(e){
+  let done=0; const files=Array.from(e.target.files);
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=ev=>{ pendingPhotos.push(ev.target.result); done++; if(done===files.length) renderThumbs(); };
+    r.readAsDataURL(f);
+  });
+  e.target.value="";
+}
+function removePhoto(i){ pendingPhotos.splice(i,1); renderThumbs(); }
+function renderThumbs(){
+  document.getElementById("photo-thumbs").innerHTML=pendingPhotos.map((src,i)=>
+    `<div class="thumb-wrap"><img src="${src}"><button class="thumb-del" onclick="removePhoto(${i})">✕</button></div>`
+  ).join("");
+}
+
+// ══════════════════════════════════════════
+//  TABLE RENDER
+// ══════════════════════════════════════════
+function renderTable(){
+  const q=(document.getElementById("search-input").value||"").toLowerCase();
+  const list=entries.filter(e=>!q||e.名稱?.toLowerCase().includes(q)||(e.供應商||"").toLowerCase().includes(q)||(e.備註||"").toLowerCase().includes(q));
+  const wrap=document.getElementById("table-wrap");
+  const mCards=document.getElementById("mobile-cards");
+  const mSummary=document.getElementById("mobile-summary");
+
+  if(list.length===0){
+    wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":"，請填寫上方表單新增"}</div>`;
+    if(mCards) mCards.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;
+    if(mSummary) mSummary.style.display="none";
+    return;
+  }
+  const showEdit=can.editEntry(), showDel=can.deleteEntry();
+  let totalCBM=0,totalNet=0;
+
+  // ── DESKTOP TABLE ──
+  let html=`<table><thead><tr>
+    <th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th>
+    <th>總重</th><th>板重</th><th>淨重</th>
+    <th>材積明細</th><th>CBM</th><th>備註</th><th>照片</th>
+    <th>建立者</th><th>修改記錄</th>
+    ${(showEdit||showDel)?"<th>操作</th>":""}
+  </tr></thead><tbody>`;
+  list.forEach(e=>{
+    totalCBM+=e.cbm||0; totalNet+=e.淨重||0;
+    const dimHTML=(e.dims?.length>0)
+      ?e.dims.map(d=>`<span style="white-space:nowrap;">${d.len}×${d.wid}×${d.hei}㎝×${d.qty}件</span>`).join("<br>"):"—";
+    const photoCell=(e.photos?.length>0)
+      ?`<img src="${e.photos[0]}" onclick="openLightbox('${e.id}',0)"><span class="img-count">${e.photos.length>1?` +${e.photos.length-1}`:""}</span>`:"—";
+    const modLog=(e.修改紀錄?.length>0)
+      ?e.修改紀錄.map(m=>`<span class="op-badge">${m.操作者} ${m.時間}</span>`).join("<br>"):"—";
+    html+=`<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:11px;">${e.日期時間||""}</td>
+      <td><strong>${e.名稱}</strong></td>
+      <td>${e.供應商||"—"}</td><td>${e.件數||"—"}</td>
+      <td>${e.總重||"—"}</td><td>${e.板重||"—"}</td><td>${e.淨重||"—"}</td>
+      <td style="text-align:left;font-size:12px;">${dimHTML}</td>
+      <td class="cbm-cell">${e.cbm||"—"}</td>
+      <td style="max-width:100px;white-space:normal;text-align:left;font-size:12px;">${e.備註||"—"}</td>
+      <td class="img-cell">${photoCell}</td>
+      <td><span class="op-badge">${e.建立者||"—"}</span></td>
+      <td style="font-size:11px;">${modLog}</td>
+      ${(showEdit||showDel)?`<td style="white-space:nowrap;">
+        ${showEdit?`<button class="btn-edit-sm" onclick="editEntry('${e.id}')">修改</button>`:""}
+        ${showDel?`<button class="btn-danger-sm" onclick="deleteEntry('${e.id}','${e.名稱?.replace(/'/g,"\\'")}')">刪除</button>`:""}
+      </td>`:""}
+    </tr>`;
+  });
+  html+=`</tbody><tfoot><tr class="summary-row">
+    <td colspan="7" style="text-align:right;font-size:12px;">合計</td>
+    <td>—</td><td>${totalCBM.toFixed(4)} m³</td>
+    <td>淨重：${totalNet.toFixed(3)} kg</td>
+    <td colspan="${(showEdit||showDel)?4:3}"></td>
+  </tr></tfoot></table>`;
+  wrap.innerHTML=html;
+
+  // ── MOBILE CARDS ──
+  if(mSummary){
+    mSummary.style.display="flex";
+    mSummary.innerHTML=`
+      <div class="mobile-sum-item"><div class="mobile-sum-val">${list.length}</div><div class="mobile-sum-label">筆記錄</div></div>
+      <div class="mobile-sum-item"><div class="mobile-sum-val">${totalCBM.toFixed(3)}</div><div class="mobile-sum-label">總 CBM (m³)</div></div>
+      <div class="mobile-sum-item"><div class="mobile-sum-val">${totalNet.toFixed(1)}</div><div class="mobile-sum-label">淨重 (kg)</div></div>`;
+  }
+  if(mCards){
+    mCards.innerHTML=list.map(e=>{
+      const dims=(e.dims?.length>0)?e.dims.map(d=>`${d.len}×${d.wid}×${d.hei}㎝ ×${d.qty}件`).join("　"):"—";
+      const photos=(e.photos?.length>0)?`<div class="entry-photos">${e.photos.map((p,i)=>`<img src="${p}" onclick="openLightbox('${e.id}',${i})">`).join("")}</div>`:"";
+      const modLog=e.修改紀錄?.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px;">✏️ ${e.修改紀錄.map(m=>m.操作者).join(", ")} 修改過</div>`:"";
+      return `<div class="entry-card">
+        <div class="entry-card-header">
+          <div>
+            <div class="entry-card-name">${e.名稱}</div>
+            <div class="entry-card-date">${e.日期時間||""}</div>
+          </div>
+          <span class="op-badge">${e.建立者||"—"}</span>
+        </div>
+        <div class="entry-card-body">
+          <div class="entry-field"><div class="entry-field-label">供應商</div><div class="entry-field-val">${e.供應商||"—"}</div></div>
+          <div class="entry-field"><div class="entry-field-label">件數</div><div class="entry-field-val">${e.件數||"—"}</div></div>
+          <div class="entry-field"><div class="entry-field-label">總重</div><div class="entry-field-val mono">${e.總重||"—"} kg</div></div>
+          <div class="entry-field"><div class="entry-field-label">淨重</div><div class="entry-field-val mono">${e.淨重||"—"} kg</div></div>
+          <div class="entry-field"><div class="entry-field-label">CBM</div><div class="entry-field-val mono">${e.cbm||"—"} m³</div></div>
+          <div class="entry-field"><div class="entry-field-label">備註</div><div class="entry-field-val" style="font-size:13px;">${e.備註||"—"}</div></div>
+        </div>
+        <div class="entry-card-dims">📐 ${dims}</div>
+        ${photos}
+        ${modLog}
+        <div class="entry-card-footer">
+          <div class="entry-card-ops">
+            ${showEdit?`<button class="btn-edit-sm" onclick="editEntry('${e.id}');switchPage('form')">修改</button>`:""}
+            ${showDel?`<button class="btn-danger-sm" onclick="deleteEntry('${e.id}','${e.名稱?.replace(/'/g,"\\'")}')">刪除</button>`:""}
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+}
+
+// ══════════════════════════════════════════
+//  EXPORT / PRINT
+// ══════════════════════════════════════════
+function exportExcel(){
+  if(!can.exportExcel()) return alert("您沒有匯出權限");
+  if(!entries.length) return alert("沒有資料");
+  const rows=[];
+  entries.forEach(e=>{
+    const dims=(e.dims?.length>0)?e.dims:[{len:0,wid:0,hei:0,qty:1}];
+    dims.forEach((d,i)=>{
+      const sc=(d.len&&d.wid&&d.hei)?+((d.len*d.wid*d.hei)/1e6).toFixed(6):0;
+      rows.push({
+        "日期時間":i===0?e.日期時間:"","貨物名稱":i===0?e.名稱:"","供應商":i===0?e.供應商:"",
+        "總件數":i===0?e.件數:"","總重(kg)":i===0?e.總重:"","板重(kg)":i===0?e.板重:"","淨重(kg)":i===0?e.淨重:"",
+        "尺寸序號":i+1,"長(cm)":d.len,"寬(cm)":d.wid,"高(cm)":d.hei,"件數":d.qty,
+        "單箱CBM":sc,"小計CBM":+(sc*(d.qty||0)).toFixed(6),
+        "總CBM(m³)":i===0?e.cbm:"","備註":i===0?e.備註:"",
+        "建立者":i===0?e.建立者:"",
+        "修改紀錄":i===0&&e.修改紀錄?.length?e.修改紀錄.map(m=>`${m.操作者}(${m.時間})`).join("; "):"",
+        "照片數量":i===0?(e.photos||[]).length:"",
+      });
+    });
+  });
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,"進倉記錄");
+  saveAs(new Blob([XLSX.write(wb,{bookType:"xlsx",type:"array"})],{type:"application/octet-stream"}),`${currentGroup.name}_進倉記錄.xlsx`);
+  toast("Excel 匯出成功","success");
+}
+
+function printTable(){
+  if(!entries.length) return alert("沒有資料可列印");
+  const pw=window.open("","列印");
+  const cols=["日期時間","名稱","供應商","件數","總重","板重","淨重","材積明細","CBM","備註","建立者","修改記錄"];
+  const rows=entries.map(e=>{
+    const dims=(e.dims?.length>0)?e.dims:[{len:0,wid:0,hei:0,qty:1}];
+    return `<tr>
+      <td>${e.日期時間||""}</td><td>${e.名稱}</td><td>${e.供應商||""}</td><td>${e.件數||""}</td>
+      <td>${e.總重||""}</td><td>${e.板重||""}</td><td>${e.淨重||""}</td>
+      <td>${dims.map(d=>`${d.len}×${d.wid}×${d.hei}cm×${d.qty}件`).join("<br>")}</td>
+      <td>${e.cbm||""}</td><td>${e.備註||""}</td><td>${e.建立者||""}</td>
+      <td>${e.修改紀錄?.map(m=>`${m.操作者}(${m.時間})`).join("<br>")||"—"}</td>
+    </tr>`;
+  }).join("");
+  pw.document.write(`<html><head><title>${currentGroup.name}</title>
+  <style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}
+  th,td{border:1px solid #ccc;padding:5px;font-size:11px;text-align:center;}th{background:#f0f0f0;}</style></head>
+  <body><h2>📦 ${currentGroup.name}</h2>
+  <p style="font-size:11px;color:#888;">列印：${new Date().toLocaleString("zh-TW")} ｜ 操作者：${currentUser.name}</p>
+  <table><thead><tr>${cols.map(c=>`<th>${c}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>
+  </body></html>`);
+  pw.document.close(); pw.print();
+}
+
+// LIGHTBOX
+function openLightbox(entryId, pi){
+  const e=entries.find(x=>x.id===entryId);
+  if(!e?.photos?.[pi]) return;
+  document.getElementById("lightbox-img").src=e.photos[pi];
+  document.getElementById("lightbox").classList.add("show");
+}
+function closeLightbox(){ document.getElementById("lightbox").classList.remove("show"); }
+
+// STATS
+function updateHeaderStats(){
+  document.getElementById("total-groups").textContent=groups.length;
+  // count will be updated asynchronously via chip counts
+  const total=entries.length;
+  document.getElementById("total-records").textContent=total;
+}
+
+// ══════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════
+initLoginScreen();
+</script>
+</body>
+</html>
