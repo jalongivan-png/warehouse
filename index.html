@@ -437,7 +437,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
             <label>📐 材積明細 — 長×寬×高 (cm) × 件數</label>
             <div class="dim-table-wrap">
               <table class="dim-table">
-                <thead><tr><th>#</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>件數</th><th>單箱CBM</th><th>小計</th><th></th></tr></thead>
+                <thead><tr><th>#</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>件數</th><th>整批</th><th>單箱CBM</th><th>小計CBM</th><th></th></tr></thead>
                 <tbody id="dim-tbody"></tbody>
               </table>
             </div>
@@ -894,7 +894,7 @@ function editEntry(id){
   document.getElementById("f-gross").value=e.總重||"";
   document.getElementById("f-tare").value=e.板重||"";
   document.getElementById("f-notes").value=e.備註||"";
-  dimRows=(e.dims?.length>0)?e.dims.map(d=>({len:d.len||"",wid:d.wid||"",hei:d.hei||"",qty:d.qty||1})):[{len:"",wid:"",hei:"",qty:1}];
+  dimRows=(e.dims?.length>0)?e.dims.map(d=>({len:d.len||"",wid:d.wid||"",hei:d.hei||"",qty:d.qty||1,bulk:!!d.bulk})):[{len:"",wid:"",hei:"",qty:1,bulk:false}];
   renderDimTable();
   pendingPhotos=[...(e.photos||[])];
   renderThumbs(); calcNet();
@@ -932,7 +932,7 @@ function getFormData(){
     供應商:  document.getElementById("f-supplier").value.trim(),
     件數:    document.getElementById("f-count").value,
     總重, 板重, 淨重:+(總重-板重).toFixed(4),
-    dims: dimRows.map(r=>({len:parseFloat(r.len)||0,wid:parseFloat(r.wid)||0,hei:parseFloat(r.hei)||0,qty:parseInt(r.qty)||0})),
+    dims: dimRows.map(r=>({len:parseFloat(r.len)||0,wid:parseFloat(r.wid)||0,hei:parseFloat(r.hei)||0,qty:parseInt(r.qty)||0,bulk:!!r.bulk})),
     cbm: +getTotalCBM().toFixed(6),
     備註:    document.getElementById("f-notes").value.trim(),
     photos:  [...pendingPhotos],
@@ -940,21 +940,67 @@ function getFormData(){
 }
 
 // DIM TABLE
-function addDimRow(len="",wid="",hei="",qty=1){ dimRows.push({len,wid,hei,qty}); renderDimTable(); }
-function removeDimRow(i){ dimRows.splice(i,1); renderDimTable(); }
+function addDimRow(len="",wid="",hei="",qty=1,bulk=false){
+  dimRows.push({len,wid,hei,qty,bulk});
+  renderDimTable();
+}
+function removeDimRow(i){
+  dimRows.splice(i,1);
+  renderDimTable();
+}
+function toggleBulk(i){
+  dimRows[i].bulk = !dimRows[i].bulk;
+  if(dimRows[i].bulk) dimRows[i].qty = 1;
+  renderDimTable();
+}
+// 離開欄位才同步回 dimRows 並更新CBM，打字中不重繪
+function syncDimField(i, field, val){
+  dimRows[i][field] = val;
+  updateCBMDisplay();
+}
+function updateCBMDisplay(){
+  dimRows.forEach((r,i)=>{
+    const l=parseFloat(r.len)||0, w=parseFloat(r.wid)||0, h=parseFloat(r.hei)||0, q=parseInt(r.qty)||0;
+    const single = (l&&w&&h) ? +((l*w*h)/1e6).toFixed(6) : null;
+    const sub    = (single!=null&&q) ? +(single*q).toFixed(6) : null;
+    const row = document.querySelector(`#dim-tbody tr[data-row="${i}"]`);
+    if(!row) return;
+    const sc = row.querySelector(".cbm-single");
+    const st = row.querySelector(".cbm-sub");
+    if(sc) sc.textContent = single!=null ? single : "—";
+    if(st) st.textContent = sub!=null ? sub : "—";
+  });
+  updateCBMTotal();
+}
 function renderDimTable(){
-  document.getElementById("dim-tbody").innerHTML=dimRows.map((r,i)=>{
-    const l=parseFloat(r.len)||0,w=parseFloat(r.wid)||0,h=parseFloat(r.hei)||0,q=parseInt(r.qty)||0;
-    const single=(l&&w&&h)?+((l*w*h)/1e6).toFixed(6):null;
-    const sub=(single&&q)?+(single*q).toFixed(6):null;
-    return `<tr>
-      <td style="color:var(--text3);font-size:12px;padding:5px 6px;">${i+1}</td>
-      <td><input type="number" placeholder="長" step="0.1" value="${r.len}" oninput="dimRows[${i}].len=this.value;renderDimTable()"></td>
-      <td><input type="number" placeholder="寬" step="0.1" value="${r.wid}" oninput="dimRows[${i}].wid=this.value;renderDimTable()"></td>
-      <td><input type="number" placeholder="高" step="0.1" value="${r.hei}" oninput="dimRows[${i}].hei=this.value;renderDimTable()"></td>
-      <td><input type="number" placeholder="1" min="1" step="1" value="${r.qty}" oninput="dimRows[${i}].qty=this.value;renderDimTable()"></td>
-      <td class="cbm-val">${single!==null?single:"—"}</td>
-      <td class="cbm-val" style="color:var(--success);">${sub!==null?sub:"—"}</td>
+  document.getElementById("dim-tbody").innerHTML = dimRows.map((r,i)=>{
+    const l=parseFloat(r.len)||0, w=parseFloat(r.wid)||0, h=parseFloat(r.hei)||0, q=parseInt(r.qty)||0;
+    const single = (l&&w&&h) ? +((l*w*h)/1e6).toFixed(6) : null;
+    const sub    = (single!=null&&q) ? +(single*q).toFixed(6) : null;
+    const isBulk = !!r.bulk;
+    return `<tr data-row="${i}" style="${isBulk?'background:rgba(245,158,11,.06);':''}">
+      <td style="color:var(--text3);font-size:12px;padding:5px 6px;text-align:center;">
+        ${i+1}${isBulk?`<br><span style="font-size:10px;color:var(--warning);">整批</span>`:''}
+      </td>
+      <td><input type="number" placeholder="長" step="0.1" value="${r.len}"
+        onblur="syncDimField(${i},'len',this.value)"></td>
+      <td><input type="number" placeholder="寬" step="0.1" value="${r.wid}"
+        onblur="syncDimField(${i},'wid',this.value)"></td>
+      <td><input type="number" placeholder="高" step="0.1" value="${r.hei}"
+        onblur="syncDimField(${i},'hei',this.value)"></td>
+      <td><input type="number" class="dim-qty" placeholder="1" min="1" step="1"
+        value="${isBulk?1:r.qty}"
+        ${isBulk?'disabled style="opacity:.5;"':''}
+        onblur="syncDimField(${i},'qty',this.value)"></td>
+      <td style="text-align:center;">
+        <input type="checkbox" ${isBulk?'checked':''}
+          onchange="toggleBulk(${i})"
+          style="width:18px;height:18px;cursor:pointer;accent-color:var(--warning);">
+      </td>
+      <td class="cbm-val cbm-single">${single!=null?single:"—"}</td>
+      <td class="cbm-val cbm-sub" style="color:${isBulk?'var(--warning)':'var(--success)'};">
+        ${sub!=null?sub:"—"}
+      </td>
       <td><button class="btn-del-dim" onclick="removeDimRow(${i})">✕</button></td>
     </tr>`;
   }).join("");
@@ -1018,7 +1064,7 @@ function renderTable(){
   list.forEach(e=>{
     totalCBM+=e.cbm||0; totalNet+=e.淨重||0;
     const dimHTML=(e.dims?.length>0)
-      ?e.dims.map(d=>`<span style="white-space:nowrap;">${d.len}×${d.wid}×${d.hei}㎝×${d.qty}件</span>`).join("<br>"):"—";
+      ?e.dims.map(d=>`<span style="white-space:nowrap;">${d.len}×${d.wid}×${d.hei}㎝×${d.qty}件${d.bulk?'<span style="font-size:10px;color:var(--warning);margin-left:3px;">整批</span>':''}</span>`).join("<br>"):"—";
     const photoCell=(e.photos?.length>0)
       ?`<img src="${e.photos[0]}" onclick="openLightbox('${e.id}',0)"><span class="img-count">${e.photos.length>1?` +${e.photos.length-1}`:""}</span>`:"—";
     const modLog=(e.修改紀錄?.length>0)
@@ -1058,7 +1104,7 @@ function renderTable(){
   }
   if(mCards){
     mCards.innerHTML=list.map(e=>{
-      const dims=(e.dims?.length>0)?e.dims.map(d=>`${d.len}×${d.wid}×${d.hei}㎝ ×${d.qty}件`).join("　"):"—";
+      const dims=(e.dims?.length>0)?e.dims.map(d=>`${d.len}×${d.wid}×${d.hei}㎝ ×${d.qty}件${d.bulk?' [整批]':''}`).join("　"):"—";
       const photos=(e.photos?.length>0)?`<div class="entry-photos">${e.photos.map((p,i)=>`<img src="${p}" onclick="openLightbox('${e.id}',${i})">`).join("")}</div>`:"";
       const modLog=e.修改紀錄?.length?`<div style="font-size:11px;color:var(--text3);margin-top:4px;">✏️ ${e.修改紀錄.map(m=>m.操作者).join(", ")} 修改過</div>`:"";
       return `<div class="entry-card">
@@ -1107,6 +1153,7 @@ function exportExcel(){
         "總件數":i===0?e.件數:"","總重(kg)":i===0?e.總重:"","板重(kg)":i===0?e.板重:"","淨重(kg)":i===0?e.淨重:"",
         "尺寸序號":i+1,"長(cm)":d.len,"寬(cm)":d.wid,"高(cm)":d.hei,"件數":d.qty,
         "單箱CBM":sc,"小計CBM":+(sc*(d.qty||0)).toFixed(6),
+        "整批":d.bulk?"是":"",
         "總CBM(m³)":i===0?e.cbm:"","備註":i===0?e.備註:"",
         "建立者":i===0?e.建立者:"",
         "修改紀錄":i===0&&e.修改紀錄?.length?e.修改紀錄.map(m=>`${m.操作者}(${m.時間})`).join("; "):"",
