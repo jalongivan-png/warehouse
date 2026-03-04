@@ -1280,67 +1280,59 @@ function setupEnterNavigation(){
 initLoginScreen();
 
 // ══════════════════════════════════════════
-//  Windows 觸控 POS 強制喚醒鍵盤
+//  Windows 8.1 Touch + Chrome 強制喚醒鍵盤
+//  原理：在欄位旁產生一個隱藏的 readonly=false
+//  input 並立即 focus，騙過 Windows TabTip.exe
 // ══════════════════════════════════════════
-function setupPOSKeyboard(){
-  function forceKeyboard(el){
-    if(!el) return;
+(function(){
+  // 建立一個不可見的誘餌 input，用來欺騙 Windows 觸控鍵盤服務
+  var decoy = document.createElement("input");
+  decoy.setAttribute("type","text");
+  decoy.style.cssText = "position:fixed;top:-999px;left:-999px;width:1px;height:1px;opacity:0;pointer-events:none;";
+  document.body.appendChild(decoy);
 
-    // Windows 觸控：pointerdown 比 touchstart 更可靠
-    ["pointerdown","touchstart","click"].forEach(evt=>{
-      el.addEventListener(evt, function(e){
-        // 確保 input 沒有 readonly（部分框架會加）
-        el.removeAttribute("readonly");
-        // Windows 觸控鍵盤需要 blur → focus 循環才能觸發
-        el.blur();
-        setTimeout(()=>{
-          el.focus();
-          // 數字/文字欄位全選方便覆蓋輸入
-          if(el.select) el.select();
-        }, 30);
-      }, { passive: true });
-    });
+  function triggerWinKeyboard(target){
+    // Step1: focus 誘餌欄位，讓 Windows 知道現在有輸入需求
+    decoy.removeAttribute("readonly");
+    decoy.focus();
+    setTimeout(function(){
+      // Step2: 切回真正的目標欄位
+      target.removeAttribute("readonly");
+      target.focus();
+      if(target.select) target.select();
+    }, 50);
   }
 
   function applyToAll(){
-    document.querySelectorAll(
+    var els = document.querySelectorAll(
       "input[type=text], input[type=number], input[type=datetime-local], input[type=password], textarea"
-    ).forEach(el=>{
-      if(el.dataset.posKb) return;
-      el.dataset.posKb = "1";
-      forceKeyboard(el);
-    });
+    );
+    for(var i=0; i<els.length; i++){
+      (function(el){
+        if(el.dataset.posKb) return;
+        el.dataset.posKb = "1";
+        // 同時監聽 touchstart 和 click，確保觸控和滑鼠都能觸發
+        el.addEventListener("touchstart", function(){ triggerWinKeyboard(el); }, { passive:true });
+        el.addEventListener("click",      function(){ triggerWinKeyboard(el); });
+      })(els[i]);
+    }
   }
 
   applyToAll();
 
-  // 動態新增的欄位（材積列）也自動套用
-  new MutationObserver(()=>applyToAll())
-    .observe(document.body, { childList:true, subtree:true });
-}
+  // 動態新增欄位（材積列）也自動套用
+  var observer = new MutationObserver(function(){ applyToAll(); });
+  observer.observe(document.body, { childList:true, subtree:true });
+})();
 
-// 登入後掛載
+// 登入後掛載 Enter 跳欄
 (function(){
   const orig = onAfterLogin;
   onAfterLogin = async function(){
     await orig.call(this);
     setupEnterNavigation();
-    setupPOSKeyboard();
   };
 })();
-
-// 登入頁面也套用
-document.addEventListener("DOMContentLoaded", ()=>{
-  document.querySelectorAll("#login-screen input").forEach(el=>{
-    ["pointerdown","touchstart","click"].forEach(evt=>{
-      el.addEventListener(evt, function(){
-        el.removeAttribute("readonly");
-        el.blur();
-        setTimeout(()=>{ el.focus(); }, 30);
-      }, { passive:true });
-    });
-  });
-});
 </script>
 </body>
 </html>
