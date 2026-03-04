@@ -152,22 +152,6 @@ textarea{resize:vertical;min-height:60px;}
 .thumb-wrap img{width:100%;height:100%;object-fit:cover;}
 .thumb-del{position:absolute;top:3px;right:3px;background:rgba(0,0,0,.75);border:none;color:white;width:18px;height:18px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;}
 
-/* PHOTO UPLOAD */
-.photo-upload-area{display:flex;flex-direction:column;gap:8px;}
-.photo-btn-row{display:flex;gap:10px;}
-.photo-btn{
-  flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;
-  background:var(--surface2);border:1px solid var(--border);border-radius:12px;
-  padding:16px 8px;cursor:pointer;font-family:'Noto Sans TC',sans-serif;
-  color:var(--text2);transition:all .2s;
-}
-.photo-btn:hover{border-color:var(--accent);color:var(--text);}
-.photo-btn span:nth-child(2){font-size:14px;font-weight:500;}
-@media(max-width:768px){
-  .photo-btn{padding:20px 8px;}
-  .photo-btn span:nth-child(2){font-size:15px;}
-}
-
 /* BUTTONS */
 .btn-row{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap;}
 .btn{padding:9px 20px;border-radius:8px;border:none;cursor:pointer;font-size:14px;font-family:'Noto Sans TC',sans-serif;font-weight:500;transition:all .2s;display:inline-flex;align-items:center;gap:6px;}
@@ -468,36 +452,19 @@ tr:hover td{background:rgba(79,156,249,.04);}
           </div>
           <div class="form-group full">
             <label>📷 拍照 / 上傳圖片</label>
-            <div class="photo-upload-area">
-              <!-- 兩個按鈕 -->
-              <div class="photo-btn-row">
-                <button type="button" class="photo-btn" onclick="openCamera()">
-                  <span style="font-size:22px;">📷</span>
-                  <span>開啟相機拍照</span>
-                  <span style="font-size:11px;color:var(--text3);">可選 iVCam</span>
-                </button>
-                <label class="photo-btn">
+            <div class="photo-zone" style="cursor:default;">
+              <div class="photo-zone-icon">📷</div>
+              <div class="photo-zone-text">選擇上傳方式</div>
+              <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+                <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(79,156,249,.12);border:1px solid rgba(79,156,249,.3);color:var(--accent);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+                  🖼 選擇圖片
                   <input type="file" id="f-photos" accept="image/*" multiple onchange="handlePhotos(event)" style="display:none;">
-                  <span style="font-size:22px;">📁</span>
-                  <span>選擇圖片檔案</span>
-                  <span style="font-size:11px;color:var(--text3);">JPG / PNG</span>
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+                  📷 開啟相機
+                  <input type="file" id="f-photos-cam" accept="image/*" capture="environment" onchange="handlePhotos(event)" style="display:none;">
                 </label>
               </div>
-              <!-- 相機拍照介面 -->
-              <div id="camera-box" style="display:none;margin-top:12px;border:1px solid var(--border);border-radius:12px;overflow:hidden;">
-                <div style="position:relative;background:#000;">
-                  <video id="cam-video" autoplay playsinline style="width:100%;max-height:300px;display:block;"></video>
-                  <div style="position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:12px;">
-                    <button type="button" onclick="snapPhoto()" style="background:white;border:none;border-radius:50%;width:56px;height:56px;font-size:24px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.4);">📸</button>
-                    <button type="button" onclick="closeCamera()" style="background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.3);border-radius:50%;width:40px;height:40px;font-size:18px;cursor:pointer;color:white;align-self:center;">✕</button>
-                  </div>
-                </div>
-                <div style="padding:8px 12px;background:var(--surface2);">
-                  <label style="font-size:12px;color:var(--text2);">選擇相機來源：</label>
-                  <select id="cam-select" onchange="switchCamera(this.value)" style="margin-left:8px;font-size:13px;padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);"></select>
-                </div>
-              </div>
-              <canvas id="cam-canvas" style="display:none;"></canvas>
             </div>
             <div class="photo-thumbs" id="photo-thumbs"></div>
           </div>
@@ -958,7 +925,7 @@ function resetForm(){
   document.getElementById("net-display").textContent="—";
   dimRows=[]; addDimRow(); pendingPhotos=[]; renderThumbs();
 }
-function cancelEdit(){ editingId=null; closeCamera(); document.getElementById("form-title").textContent="新增進倉記錄"; document.getElementById("submit-btn").textContent="📌 建立記錄"; resetForm(); }
+function cancelEdit(){ editingId=null; document.getElementById("form-title").textContent="新增進倉記錄"; document.getElementById("submit-btn").textContent="📌 建立記錄"; resetForm(); }
 function calcNet(){
   const g=parseFloat(document.getElementById("f-gross").value)||0;
   const t=parseFloat(document.getElementById("f-tare").value)||0;
@@ -1061,7 +1028,6 @@ function getTotalCBM(){ return updateCBMTotal(); }
 // PHOTOS
 function handlePhotos(e){
   let done=0; const files=Array.from(e.target.files);
-  if(!files.length) return;
   files.forEach(f=>{
     const r=new FileReader();
     r.onload=ev=>{ pendingPhotos.push(ev.target.result); done++; if(done===files.length) renderThumbs(); };
@@ -1074,59 +1040,6 @@ function renderThumbs(){
   document.getElementById("photo-thumbs").innerHTML=pendingPhotos.map((src,i)=>
     `<div class="thumb-wrap"><img src="${src}"><button class="thumb-del" onclick="removePhoto(${i})">✕</button></div>`
   ).join("");
-}
-
-// CAMERA
-let camStream = null;
-async function openCamera(){
-  const box = document.getElementById("camera-box");
-  const video = document.getElementById("cam-video");
-  const sel = document.getElementById("cam-select");
-  try {
-    // 先取得權限
-    const initStream = await navigator.mediaDevices.getUserMedia({video:true,audio:false});
-    initStream.getTracks().forEach(t=>t.stop());
-    // 列出所有相機裝置（包含 iVCam）
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    const cameras = devices.filter(d=>d.kind==="videoinput");
-    sel.innerHTML = cameras.map((d,i)=>`<option value="${d.deviceId}">${d.label||'相機 '+(i+1)}</option>`).join("");
-    // 預設選 iVCam（若有）
-    const ivcam = cameras.find(d=>d.label.toLowerCase().includes("ivcam")||d.label.toLowerCase().includes("iv cam"));
-    if(ivcam) sel.value = ivcam.deviceId;
-    // 啟動選定相機
-    await startCamStream(sel.value);
-    box.style.display = "block";
-  } catch(err){
-    toast("無法存取相機："+err.message,"error");
-  }
-}
-async function startCamStream(deviceId){
-  if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  const constraints = deviceId
-    ? {video:{deviceId:{exact:deviceId}},audio:false}
-    : {video:true,audio:false};
-  camStream = await navigator.mediaDevices.getUserMedia(constraints);
-  document.getElementById("cam-video").srcObject = camStream;
-}
-async function switchCamera(deviceId){
-  try { await startCamStream(deviceId); } catch(e){ toast("切換相機失敗","error"); }
-}
-function snapPhoto(){
-  const video = document.getElementById("cam-video");
-  const canvas = document.getElementById("cam-canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
-  canvas.getContext("2d").drawImage(video,0,0);
-  const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-  pendingPhotos.push(dataUrl);
-  renderThumbs();
-  toast("拍照成功 ✓","success");
-}
-function closeCamera(){
-  if(camStream) camStream.getTracks().forEach(t=>t.stop());
-  camStream = null;
-  document.getElementById("camera-box").style.display="none";
-  document.getElementById("cam-video").srcObject = null;
 }
 
 // ══════════════════════════════════════════
@@ -1305,9 +1218,129 @@ function updateHeaderStats(){
 }
 
 // ══════════════════════════════════════════
+//  ENTER 鍵自動跳下一欄位
+// ══════════════════════════════════════════
+function setupEnterNavigation(){
+  // 表單欄位順序（依畫面排列）
+  const formFieldIds = [
+    "f-datetime",
+    "f-name",
+    "f-supplier",
+    "f-count",
+    "f-gross",
+    "f-tare",
+    "f-notes",
+  ];
+
+  formFieldIds.forEach((id, idx) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("keydown", e => {
+      // 輸入法組字中（中文選字）不攔截 Enter
+      if(e.isComposing || e.keyCode === 229) return;
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      const nextId = formFieldIds[idx + 1];
+      if(nextId){
+        const next = document.getElementById(nextId);
+        if(next){ next.focus(); next.select && next.select(); }
+      }
+    });
+  });
+
+  // 材積表格：Enter 橫向跳欄，最後一欄自動新增一列
+  const dimTbody = document.getElementById("dim-tbody");
+  if(dimTbody){
+    dimTbody.addEventListener("keydown", e => {
+      // 輸入法組字中不攔截
+      if(e.isComposing || e.keyCode === 229) return;
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      const inputs = [...dimTbody.querySelectorAll("input[type=number]:not([disabled])")];
+      const idx = inputs.indexOf(document.activeElement);
+      if(idx === -1) return;
+      const next = inputs[idx + 1];
+      if(next){ next.focus(); next.select && next.select(); }
+      else {
+        // 最後一格 Enter → 新增一列並聚焦第一個輸入
+        addDimRow();
+        setTimeout(() => {
+          const newInputs = [...dimTbody.querySelectorAll("input[type=number]:not([disabled])")];
+          const target = newInputs[inputs.length];
+          if(target){ target.focus(); }
+        }, 60);
+      }
+    });
+  }
+}
+
+// ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
 initLoginScreen();
+
+// ══════════════════════════════════════════
+//  Windows 觸控 POS 強制喚醒鍵盤
+// ══════════════════════════════════════════
+function setupPOSKeyboard(){
+  function forceKeyboard(el){
+    if(!el) return;
+
+    // Windows 觸控：pointerdown 比 touchstart 更可靠
+    ["pointerdown","touchstart","click"].forEach(evt=>{
+      el.addEventListener(evt, function(e){
+        // 確保 input 沒有 readonly（部分框架會加）
+        el.removeAttribute("readonly");
+        // Windows 觸控鍵盤需要 blur → focus 循環才能觸發
+        el.blur();
+        setTimeout(()=>{
+          el.focus();
+          // 數字/文字欄位全選方便覆蓋輸入
+          if(el.select) el.select();
+        }, 30);
+      }, { passive: true });
+    });
+  }
+
+  function applyToAll(){
+    document.querySelectorAll(
+      "input[type=text], input[type=number], input[type=datetime-local], input[type=password], textarea"
+    ).forEach(el=>{
+      if(el.dataset.posKb) return;
+      el.dataset.posKb = "1";
+      forceKeyboard(el);
+    });
+  }
+
+  applyToAll();
+
+  // 動態新增的欄位（材積列）也自動套用
+  new MutationObserver(()=>applyToAll())
+    .observe(document.body, { childList:true, subtree:true });
+}
+
+// 登入後掛載
+(function(){
+  const orig = onAfterLogin;
+  onAfterLogin = async function(){
+    await orig.call(this);
+    setupEnterNavigation();
+    setupPOSKeyboard();
+  };
+})();
+
+// 登入頁面也套用
+document.addEventListener("DOMContentLoaded", ()=>{
+  document.querySelectorAll("#login-screen input").forEach(el=>{
+    ["pointerdown","touchstart","click"].forEach(evt=>{
+      el.addEventListener(evt, function(){
+        el.removeAttribute("readonly");
+        el.blur();
+        setTimeout(()=>{ el.focus(); }, 30);
+      }, { passive:true });
+    });
+  });
+});
 </script>
 </body>
 </html>
