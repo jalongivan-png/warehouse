@@ -452,11 +452,19 @@ tr:hover td{background:rgba(79,156,249,.04);}
           </div>
           <div class="form-group full">
             <label>📷 拍照 / 上傳圖片</label>
-            <div class="photo-zone">
-              <input type="file" id="f-photos" accept="image/*" capture="environment" multiple onchange="handlePhotos(event)">
+            <div class="photo-zone" style="cursor:default;">
               <div class="photo-zone-icon">📷</div>
-              <div class="photo-zone-text">點擊拍照或選擇圖片</div>
-              <div class="photo-zone-sub">手機可直接開啟相機</div>
+              <div class="photo-zone-text">選擇上傳方式</div>
+              <div style="display:flex;gap:10px;justify-content:center;margin-top:10px;flex-wrap:wrap;">
+                <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(79,156,249,.12);border:1px solid rgba(79,156,249,.3);color:var(--accent);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+                  🖼 選擇圖片
+                  <input type="file" id="f-photos" accept="image/*" multiple onchange="handlePhotos(event)" style="display:none;">
+                </label>
+                <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+                  📷 開啟相機
+                  <input type="file" id="f-photos-cam" accept="image/*" capture="environment" onchange="handlePhotos(event)" style="display:none;">
+                </label>
+              </div>
             </div>
             <div class="photo-thumbs" id="photo-thumbs"></div>
           </div>
@@ -1210,9 +1218,71 @@ function updateHeaderStats(){
 }
 
 // ══════════════════════════════════════════
+//  ENTER 鍵自動跳下一欄位
+// ══════════════════════════════════════════
+function setupEnterNavigation(){
+  // 表單欄位順序（依畫面排列）
+  const formFieldIds = [
+    "f-datetime",
+    "f-name",
+    "f-supplier",
+    "f-count",
+    "f-gross",
+    "f-tare",
+    "f-notes",
+  ];
+
+  formFieldIds.forEach((id, idx) => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.addEventListener("keydown", e => {
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      const nextId = formFieldIds[idx + 1];
+      if(nextId){
+        const next = document.getElementById(nextId);
+        if(next){ next.focus(); next.select && next.select(); }
+      }
+    });
+  });
+
+  // 材積表格：Enter 橫向跳欄，最後一欄自動新增一列
+  const dimTbody = document.getElementById("dim-tbody");
+  if(dimTbody){
+    dimTbody.addEventListener("keydown", e => {
+      if(e.key !== "Enter") return;
+      e.preventDefault();
+      const inputs = [...dimTbody.querySelectorAll("input[type=number]:not([disabled])")];
+      const idx = inputs.indexOf(document.activeElement);
+      if(idx === -1) return;
+      const next = inputs[idx + 1];
+      if(next){ next.focus(); next.select && next.select(); }
+      else {
+        // 最後一格 Enter → 新增一列並聚焦第一個輸入
+        addDimRow();
+        setTimeout(() => {
+          const newInputs = [...dimTbody.querySelectorAll("input[type=number]:not([disabled])")];
+          const target = newInputs[inputs.length]; // 新列第一格
+          if(target){ target.focus(); }
+        }, 60);
+      }
+    });
+  }
+}
+
+// ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
 initLoginScreen();
+
+// 登入後自動掛載 Enter 跳欄
+(function(){
+  const orig = onAfterLogin;
+  onAfterLogin = async function(){
+    await orig.call(this);
+    setupEnterNavigation();
+  };
+})();
 </script>
 </body>
 </html>
