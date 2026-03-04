@@ -626,9 +626,9 @@ function toast(msg, type="info"){
 //  ROLE HELPERS
 // ══════════════════════════════════════════
 const can = {
-  editEntry:  ()=> currentUser && ["admin","supervisor"].includes(currentUser.role),
+  editEntry:  ()=> currentUser && ["admin","supervisor","user"].includes(currentUser.role),
   deleteEntry:()=> currentUser && currentUser.role==="admin",
-  addGroup:   ()=> currentUser && currentUser.role==="admin",
+  addGroup:   ()=> currentUser && ["admin","user"].includes(currentUser.role),
   deleteGroup:()=> currentUser && currentUser.role==="admin",
   exportExcel:()=> currentUser && ["admin","supervisor"].includes(currentUser.role),
   manageUsers:()=> currentUser && currentUser.role==="admin",
