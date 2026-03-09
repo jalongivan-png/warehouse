@@ -1283,7 +1283,7 @@ async function renderSupplierList(){
     return;
   }
   container.innerHTML = suppliers.map(s => {
-    const safe = s.name.replace(/\/g,'\\').replace(/'/g,"\'");
+    const safe = s.name.replace(/\\/g,'\\\\').replace(/'/g,"&apos;");
     return `<div style="display:flex;align-items:center;justify-content:space-between;background:#2e3250;border:1px solid #4a5080;border-radius:8px;padding:10px 14px;">
       <span style="font-size:15px;color:#e8eaf0;">${s.name}</span>
       <div style="display:flex;gap:6px;">
