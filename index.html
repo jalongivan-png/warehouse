@@ -665,8 +665,21 @@ let selectedLoginUser = null; // 直接用變數記錄選中的帳號
 
 async function initLoginScreen(){
   const btnArea = document.getElementById("login-user-btns");
-  if(btnArea) btnArea.innerHTML = '<div style="color:#5a5f7a;text-align:center;padding:12px;font-size:13px;">載入中...</div>';
-  const users = await loadUsers();
+  if(btnArea) btnArea.innerHTML = '<div style="color:#5a5f7a;text-align:center;padding:12px;font-size:13px;">⏳ 載入帳號中...</div>';
+
+  let users = [];
+  try {
+    users = await loadUsers();
+  } catch(e) {
+    console.error("loadUsers error:", e);
+    if(btnArea) btnArea.innerHTML = '<div style="color:#ef4444;text-align:center;padding:12px;font-size:13px;">❌ 無法載入帳號，請重新整理</div>';
+    return;
+  }
+
+  if(users.length === 0){
+    if(btnArea) btnArea.innerHTML = '<div style="color:#ef4444;text-align:center;padding:12px;font-size:13px;">❌ 找不到帳號資料</div>';
+    return;
+  }
 
   selectedLoginUser = users[0] || null;
 
@@ -1388,8 +1401,6 @@ function setupEnterNavigation(){
 // ══════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════
-initLoginScreen();  // async init
-
 // 登入後掛載 Enter 跳欄
 (function(){
   const orig = onAfterLogin;
@@ -1398,6 +1409,13 @@ initLoginScreen();  // async init
     setupEnterNavigation();
   };
 })();
+
+// 等 DOM 完全就緒再初始化登入畫面
+if(document.readyState === 'loading'){
+  document.addEventListener('DOMContentLoaded', () => initLoginScreen());
+} else {
+  initLoginScreen();
+}
 </script>
 </body>
 </html>
