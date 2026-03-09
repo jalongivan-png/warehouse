@@ -121,6 +121,8 @@ header{display:flex;align-items:center;justify-content:space-between;margin-bott
 .form-group.full{grid-column:1/-1;}
 label{font-size:15px;color:var(--text2);font-weight:500;letter-spacing:.04em;}
 input[type=text],input[type=number],input[type=datetime-local],select,textarea{background:#3d4266;border:2px solid #7a85c0;border-radius:8px;color:var(--text);padding:9px 12px;font-size:14px;font-family:'Noto Sans TC',sans-serif;transition:border-color .2s,box-shadow .2s;outline:none;width:100%;}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+input[type=number]{-moz-appearance:textfield;}
 input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(79,156,249,.12);}
 input::placeholder,textarea::placeholder{color:var(--text3);}
 textarea{resize:vertical;min-height:60px;}
