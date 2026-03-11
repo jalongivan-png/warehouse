@@ -125,6 +125,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
 .tag-blue{background:rgba(79,156,249,.15);color:var(--accent);border:1px solid rgba(79,156,249,.25);}
 .tag-green{background:rgba(34,197,94,.15);color:var(--success);border:1px solid rgba(34,197,94,.25);}
 .tag-red{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.25);}
+.tag-yellow{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.25);}
 /* DIM TABLE */
 .dim-table-wrap{overflow-x:auto;}
 .dim-table{width:100%;border-collapse:collapse;font-size:14px;}
@@ -220,6 +221,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <button class="nav-tab" onclick="showPage('inventory')" data-page="inventory">🗃 <span class="tab-lbl">庫存管理</span></button>
     <button class="nav-tab" onclick="showPage('customers')" data-page="customers">👥 <span class="tab-lbl">客戶管理</span></button>
     <button class="nav-tab" onclick="showPage('reports')" data-page="reports">📈 <span class="tab-lbl">報表統計</span></button>
+    <button class="nav-tab" onclick="showPage('delivery')" data-page="delivery">🚚 <span class="tab-lbl">到貨回報</span></button>
     <button class="nav-tab" id="nav-admin" onclick="showPage('admin')" data-page="admin" style="display:none;">⚙️ <span class="tab-lbl">系統管理</span></button>
   </div>
   <div class="nav-right">
@@ -371,6 +373,86 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div class="card"><div class="card-title"><span class="bar bar-yellow"></span>進貨記錄明細</div><div class="table-wrap" id="rpt-table"></div></div>
 </div>
 
+<!-- PAGE: DELIVERY -->
+<div class="page" id="page-delivery">
+  <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
+    <div><h2 style="font-size:18px;font-weight:700;">🚚 到貨回報</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">辦公室建立預期到貨單號，外場人員確認到貨後回報</p></div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <select id="dlv-filter" onchange="renderDelivery()" style="width:130px;">
+        <option value="all">全部</option>
+        <option value="pending" selected>待到貨</option>
+        <option value="arrived">已到貨</option>
+      </select>
+      <button class="btn btn-primary btn-sm" id="btn-add-delivery" onclick="openDeliveryModal()">＋ 建立到貨單</button>
+    </div>
+  </div>
+  <div class="stats-row" id="dlv-stats"></div>
+  <div class="card"><div class="table-wrap" id="delivery-table"></div></div>
+</div>
+
+<!-- DELIVERY MODAL (office creates) -->
+<div class="modal-overlay" id="delivery-modal">
+  <div class="modal-box" style="width:520px;">
+    <div class="modal-title"><span id="dlv-modal-title">建立預期到貨單</span><button class="modal-close" onclick="closeDeliveryModal()">✕</button></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>📋 單號 <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="dlv-code" placeholder="例：PO-20250311-001">
+      </div>
+      <div class="form-group">
+        <label>📅 預計到貨日</label>
+        <input type="date" id="dlv-eta">
+      </div>
+      <div class="form-group">
+        <label>🏭 供應商</label>
+        <input type="text" id="dlv-supplier" placeholder="供應商名稱">
+      </div>
+      <div class="form-group">
+        <label>🔢 預計件數</label>
+        <input type="number" id="dlv-count" placeholder="0" min="0">
+      </div>
+      <div class="form-group full">
+        <label>🏷 貨物描述</label>
+        <input type="text" id="dlv-desc" placeholder="貨物品名或描述">
+      </div>
+      <div class="form-group full">
+        <label>📝 辦公室備註</label>
+        <textarea id="dlv-notes" placeholder="給外場人員的說明..." style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeDeliveryModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveDelivery()">📌 建立到貨單</button>
+    </div>
+  </div>
+</div>
+
+<!-- ARRIVAL REPORT MODAL (field staff confirms) -->
+<div class="modal-overlay" id="arrival-modal">
+  <div class="modal-box" style="width:520px;">
+    <div class="modal-title">✅ 確認到貨回報 <button class="modal-close" onclick="closeArrivalModal()">✕</button></div>
+    <div id="arrival-info" style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:18px;font-size:13px;line-height:2;"></div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>📦 實際到貨件數</label>
+        <input type="number" id="arr-count" placeholder="0" min="0">
+      </div>
+      <div class="form-group">
+        <label>📅 到貨時間</label>
+        <input type="datetime-local" id="arr-time">
+      </div>
+      <div class="form-group full">
+        <label>📝 外場備註（異常、缺件等）</label>
+        <textarea id="arr-notes" placeholder="如有異常請填寫..." style="min-height:70px;"></textarea>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeArrivalModal()">取消</button>
+      <button class="btn btn-success" onclick="submitArrival()">✅ 確認到貨</button>
+    </div>
+  </div>
+</div>
+
 <!-- PAGE: ADMIN -->
 <div class="page" id="page-admin">
   <div style="margin-bottom:20px;"><h2 style="font-size:18px;font-weight:700;">⚙️ 系統管理</h2></div>
@@ -422,7 +504,25 @@ CREATE TABLE customers (
 );
 
 -- entries 新增 單價 欄位（若原本沒有）
-ALTER TABLE entries ADD COLUMN IF NOT EXISTS 單價 numeric DEFAULT 0;</pre>
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS 單價 numeric DEFAULT 0;
+
+-- 到貨回報資料表
+CREATE TABLE IF NOT EXISTS deliveries (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  code text NOT NULL,
+  supplier text,
+  description text,
+  expected_count numeric,
+  eta date,
+  office_notes text,
+  status text DEFAULT 'pending',
+  arrived_at timestamptz,
+  actual_count numeric,
+  field_notes text,
+  reporter text,
+  created_by text,
+  created_at timestamptz DEFAULT now()
+);</pre>
   </div>
 </div>
 
@@ -531,6 +631,7 @@ function showPage(name){
   if(name==='inventory')loadInventory();
   if(name==='customers')loadCustomers();
   if(name==='reports')loadReports();
+  if(name==='delivery')loadDelivery();
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
     document.getElementById('cfg-key').value=localStorage.getItem('sb_anon')||'';
@@ -548,6 +649,7 @@ const can={
   manageUsers:()=>currentUser&&currentUser.role==="admin",
   editInventory:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   editCustomers:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
+  createDelivery:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
 };
 
 // LOGIN
@@ -599,6 +701,7 @@ async function onAfterLogin(){
   document.getElementById("btn-export").style.display=can.exportExcel()?"":"none";
   document.getElementById("admin-panel-inbound").style.display=can.manageUsers()?"":"none";
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
+  document.getElementById("btn-add-delivery").style.display=can.createDelivery()?"":"none";
   if(can.manageUsers())renderUsersTable();
   document.getElementById("form-area").style.display="none";
   document.getElementById("records-area").style.display="none";
@@ -1084,6 +1187,153 @@ function exportReport(){
   const buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});
   saveAs(new Blob([buf],{type:"application/octet-stream"}),`報表_${new Date().toISOString().substring(0,10)}.xlsx`);
   toast("報表已匯出","success");
+}
+
+// DELIVERY
+let deliveries=[],editingDeliveryId=null,arrivingDeliveryId=null;
+
+async function loadDelivery(){
+  showLoading("載入到貨資料...");
+  const{data,error}=await sb.from('deliveries').select('*').order('created_at',{ascending:false});
+  hideLoading();if(error){toast("載入失敗："+error.message,"error");return;}
+  deliveries=data||[];renderDeliveryStats();renderDelivery();
+}
+
+function renderDeliveryStats(){
+  const total=deliveries.length;
+  const pending=deliveries.filter(d=>d.status==='pending').length;
+  const arrived=deliveries.filter(d=>d.status==='arrived').length;
+  const today=new Date().toISOString().substring(0,10);
+  const todayArr=deliveries.filter(d=>d.status==='arrived'&&(d.arrived_at||'').substring(0,10)===today).length;
+  document.getElementById('dlv-stats').innerHTML=`
+    <div class="stat-card"><div class="stat-icon si-yellow">⏳</div><div><div class="stat-num mono">${pending}</div><div class="stat-label">待到貨</div></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num mono">${arrived}</div><div class="stat-label">已到貨</div></div></div>
+    <div class="stat-card"><div class="stat-icon si-cyan">📅</div><div><div class="stat-num mono">${todayArr}</div><div class="stat-label">今日到貨</div></div></div>
+    <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-num mono">${total}</div><div class="stat-label">全部單數</div></div></div>`;
+}
+
+function renderDelivery(){
+  const filter=document.getElementById('dlv-filter').value;
+  const list=filter==='all'?deliveries:deliveries.filter(d=>d.status===filter);
+  const wrap=document.getElementById('delivery-table');
+  if(!list.length){wrap.innerHTML=`<div class="no-data">📭 ${filter==='pending'?'目前沒有待到貨記錄':filter==='arrived'?'沒有已到貨記錄':'暫無資料'}</div>`;return;}
+  const canCreate=can.createDelivery();
+  wrap.innerHTML=`<table><thead><tr>
+    <th>單號</th><th>供應商</th><th>貨物描述</th><th>預計件數</th><th>預計到貨日</th>
+    <th>狀態</th><th>實際到貨時間</th><th>實際件數</th><th>回報人</th><th>備註</th><th>操作</th>
+  </tr></thead><tbody>
+  ${list.map(d=>{
+    const isPending=d.status==='pending';
+    const etaStr=d.eta||'—';
+    const today=new Date().toISOString().substring(0,10);
+    const isOverdue=isPending&&d.eta&&d.eta<today;
+    return`<tr>
+      <td style="font-weight:700;font-family:'DM Mono',monospace;color:var(--accent);">${d.code}</td>
+      <td>${d.supplier||'—'}</td>
+      <td style="font-weight:600;">${d.description||'—'}</td>
+      <td class="mono">${d.expected_count||'—'}</td>
+      <td class="mono" style="color:${isOverdue?'var(--danger)':'var(--text)'};">${etaStr}${isOverdue?' ⚠️':''}</td>
+      <td><span class="tag ${isPending?'tag-yellow':'tag-green'}">${isPending?'⏳ 待到貨':'✅ 已到貨'}</span></td>
+      <td class="mono" style="font-size:12px;">${d.arrived_at?(d.arrived_at).substring(0,16):'—'}</td>
+      <td class="mono">${d.actual_count!=null?d.actual_count:'—'}</td>
+      <td><span class="tag tag-blue">${d.reporter||'—'}</span></td>
+      <td style="font-size:12px;color:var(--text2);">${isPending?(d.office_notes||''):(d.field_notes||d.office_notes||'')}</td>
+      <td style="white-space:nowrap;">
+        ${isPending?`<button class="btn btn-success btn-sm" onclick="openArrivalModal('${d.id}')">✅ 到貨</button>`:''}
+        ${canCreate&&isPending?`<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>`:''}
+        ${canCreate?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteDelivery('${d.id}','${(d.code||'').replace(/'/g,"\\'")}')">刪除</button>`:''}
+      </td>
+    </tr>`;
+  }).join('')}
+  </tbody></table>`;
+}
+
+function openDeliveryModal(id=null){
+  if(!can.createDelivery())return toast("僅辦公室人員可建立到貨單","error");
+  editingDeliveryId=id;
+  document.getElementById('delivery-modal').classList.add('show');
+  if(id){
+    const d=deliveries.find(x=>x.id===id);if(!d)return;
+    document.getElementById('dlv-modal-title').textContent='編輯到貨單';
+    document.getElementById('dlv-code').value=d.code||'';
+    document.getElementById('dlv-eta').value=d.eta||'';
+    document.getElementById('dlv-supplier').value=d.supplier||'';
+    document.getElementById('dlv-count').value=d.expected_count||'';
+    document.getElementById('dlv-desc').value=d.description||'';
+    document.getElementById('dlv-notes').value=d.office_notes||'';
+  }else{
+    document.getElementById('dlv-modal-title').textContent='建立預期到貨單';
+    ['dlv-code','dlv-supplier','dlv-desc','dlv-notes'].forEach(i=>document.getElementById(i).value='');
+    document.getElementById('dlv-count').value='';
+    // auto-generate a suggested code
+    const now=new Date();
+    const ymd=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+    document.getElementById('dlv-code').value=`PO-${ymd}-`;
+    document.getElementById('dlv-eta').value=now.toISOString().substring(0,10);
+  }
+}
+function closeDeliveryModal(){document.getElementById('delivery-modal').classList.remove('show');editingDeliveryId=null;}
+
+async function saveDelivery(){
+  const code=document.getElementById('dlv-code').value.trim();
+  if(!code)return alert('請輸入單號');
+  const payload={
+    code,
+    supplier:document.getElementById('dlv-supplier').value.trim()||null,
+    description:document.getElementById('dlv-desc').value.trim()||null,
+    expected_count:parseFloat(document.getElementById('dlv-count').value)||null,
+    eta:document.getElementById('dlv-eta').value||null,
+    office_notes:document.getElementById('dlv-notes').value.trim()||null,
+    created_by:currentUser.name,
+  };
+  showLoading("儲存中...");let error;
+  if(editingDeliveryId){({error}=await sb.from('deliveries').update(payload).eq('id',editingDeliveryId));}
+  else{({error}=await sb.from('deliveries').insert({...payload,status:'pending'}));}
+  hideLoading();
+  if(error){toast("儲存失敗："+error.message,"error");return;}
+  toast(editingDeliveryId?"到貨單已更新":"到貨單已建立","success");
+  closeDeliveryModal();await loadDelivery();
+}
+
+async function deleteDelivery(id,code){
+  if(!can.createDelivery())return;
+  if(!confirm(`確定刪除到貨單「${code}」？`))return;
+  const{error}=await sb.from('deliveries').delete().eq('id',id);
+  if(error){toast("刪除失敗","error");return;}
+  toast("已刪除","info");await loadDelivery();
+}
+
+function openArrivalModal(id){
+  arrivingDeliveryId=id;
+  const d=deliveries.find(x=>x.id===id);if(!d)return;
+  document.getElementById('arrival-info').innerHTML=`
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:4px 16px;">
+      <span style="color:var(--text2);">單號</span><span style="font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;">${d.code}</span>
+      <span style="color:var(--text2);">供應商</span><span>${d.supplier||'—'}</span>
+      <span style="color:var(--text2);">貨物</span><span>${d.description||'—'}</span>
+      <span style="color:var(--text2);">預計件數</span><span class="mono">${d.expected_count||'—'}</span>
+      ${d.office_notes?`<span style="color:var(--text2);">辦公室備註</span><span style="color:var(--warning);">${d.office_notes}</span>`:''}
+    </div>`;
+  document.getElementById('arr-count').value=d.expected_count||'';
+  const now=new Date();const p=n=>String(n).padStart(2,'0');
+  document.getElementById('arr-time').value=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}`;
+  document.getElementById('arr-notes').value='';
+  document.getElementById('arrival-modal').classList.add('show');
+}
+function closeArrivalModal(){document.getElementById('arrival-modal').classList.remove('show');arrivingDeliveryId=null;}
+
+async function submitArrival(){
+  if(!arrivingDeliveryId)return;
+  const actual_count=parseFloat(document.getElementById('arr-count').value)||null;
+  const arrived_at=document.getElementById('arr-time').value.replace('T',' ')||new Date().toISOString();
+  const field_notes=document.getElementById('arr-notes').value.trim()||null;
+  showLoading("回報中...");
+  const{error}=await sb.from('deliveries').update({
+    status:'arrived',arrived_at,actual_count,field_notes,reporter:currentUser.name
+  }).eq('id',arrivingDeliveryId);
+  hideLoading();
+  if(error){toast("回報失敗："+error.message,"error");return;}
+  toast("✅ 到貨已回報！","success");closeArrivalModal();await loadDelivery();
 }
 
 // ENTER NAV
