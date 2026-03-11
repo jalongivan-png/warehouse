@@ -200,7 +200,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
       <div class="login-logo-icon">🏭</div>
       <div><h1>倉儲批發管理系統</h1><p>WAREHOUSE · POS · MANAGEMENT</p></div>
     </div>
-    <div class="lf"><label>選擇帳號</label><div id="login-user-btns"></div></div>
+    <div class="lf"><label>帳號</label><input type="text" id="login-username" placeholder="請輸入帳號名稱" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()"></div>
     <div class="lf"><label>密碼</label><input type="password" id="login-pw" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">🔐 登入</button>
     <div class="login-err" id="login-err"></div>
@@ -680,39 +680,33 @@ async function loadUsers(){
   _cachedUsers=data||[];return _cachedUsers;
 }
 async function initLoginScreen(){
-  const btnArea=document.getElementById("login-user-btns");
-  btnArea.innerHTML='<div style="color:#5a5f7a;text-align:center;padding:12px;font-size:13px;">⏳ 載入中...</div>';
-  let users=[];
-  try{users=await loadUsers();}
-  catch(e){btnArea.innerHTML='<div style="color:#ef4444;text-align:center;">❌ 無法載入，請重新整理</div>';return;}
-  if(!users.length){btnArea.innerHTML='<div style="color:#ef4444;text-align:center;">❌ 找不到帳號</div>';return;}
-  selectedLoginUser=users[0];
-  btnArea.innerHTML=users.map((u,i)=>{
-    const rl={admin:"🔑 管理員",supervisor:"📋 主管",user:"👤 一般"}[u.role]||u.role;
-    return `<button type="button" class="user-select-btn${i===0?" selected":""}" onclick="selectUserBtn(this,${i})">
-      <span class="usb-name">${u.name}</span><span class="usb-role">${rl}</span></button>`;
-  }).join("");
-  document.getElementById("login-hint").innerHTML="";
-}
-function selectUserBtn(btn,index){
-  document.querySelectorAll(".user-select-btn").forEach(b=>b.classList.remove("selected"));
-  btn.classList.add("selected");selectedLoginUser=_cachedUsers[index]||null;
+  document.getElementById("login-username").value="";
+  document.getElementById("login-pw").value="";
   document.getElementById("login-err").textContent="";
+  try{await loadUsers();}catch(e){}
 }
+function selectUserBtn(){}
 function doLogin(){
-  if(!selectedLoginUser){document.getElementById("login-err").textContent="❌ 請先選擇帳號";return;}
+  const username=document.getElementById("login-username").value.trim();
   const pw=document.getElementById("login-pw").value;
-  if(selectedLoginUser.pw!==pw){document.getElementById("login-err").textContent="❌ 密碼錯誤";return;}
-  currentUser={name:selectedLoginUser.name,role:selectedLoginUser.role};
+  if(!username){document.getElementById("login-err").textContent="❌ 請輸入帳號";return;}
+  if(!pw){document.getElementById("login-err").textContent="❌ 請輸入密碼";return;}
+  const user=_cachedUsers.find(u=>u.name===username);
+  if(!user){document.getElementById("login-err").textContent="❌ 帳號不存在";return;}
+  if(user.pw!==pw){document.getElementById("login-err").textContent="❌ 密碼錯誤";return;}
+  currentUser={name:user.name,role:user.role};
   document.getElementById("login-screen").style.display="none";
   document.getElementById("main-app").style.display="block";
-  document.getElementById("login-pw").value="";document.getElementById("login-err").textContent="";
+  document.getElementById("login-username").value="";
+  document.getElementById("login-pw").value="";
+  document.getElementById("login-err").textContent="";
   onAfterLogin();
 }
 function doLogout(){
   currentUser=null;currentGroup=null;entries=[];selectedLoginUser=null;
   document.getElementById("main-app").style.display="none";
   document.getElementById("login-screen").style.display="flex";
+  document.getElementById("login-username").value="";
   document.getElementById("login-pw").value="";initLoginScreen();
 }
 async function onAfterLogin(){
@@ -1426,6 +1420,7 @@ function setupEnterNavigation(){
 
 // INIT
 document.addEventListener('DOMContentLoaded',async()=>{
+  await loadUsers();
   await initLoginScreen();setupEnterNavigation();
   const sinp=document.getElementById('new-supplier-input');
   if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
