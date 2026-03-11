@@ -522,7 +522,25 @@ CREATE TABLE IF NOT EXISTS deliveries (
   reporter text,
   created_by text,
   created_at timestamptz DEFAULT now()
+);
+
+-- 刪除記錄資料表
+CREATE TABLE IF NOT EXISTS delete_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  table_name text NOT NULL,
+  record_id text,
+  record_summary text,
+  deleted_by text,
+  deleted_at timestamptz DEFAULT now()
 );</pre>
+  </div>
+  <div class="card">
+    <div class="card-title"><span class="bar bar-red"></span>🗑 刪除記錄</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center;">
+      <button class="btn btn-ghost btn-sm" onclick="loadDeleteLogs()">🔄 重新整理</button>
+      <span style="font-size:12px;color:var(--text3);">僅顯示最近 100 筆</span>
+    </div>
+    <div class="table-wrap" id="delete-logs-table"><div class="no-data">點擊重新整理載入</div></div>
   </div>
 </div>
 
@@ -635,21 +653,23 @@ function showPage(name){
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
     document.getElementById('cfg-key').value=localStorage.getItem('sb_anon')||'';
-    renderAdminUsers();
+    renderAdminUsers();loadDeleteLogs();
   }
 }
 
 // PERMISSIONS
 const can={
   editEntry:()=>currentUser&&["admin","supervisor","user"].includes(currentUser.role),
-  deleteEntry:()=>currentUser&&currentUser.role==="admin",
-  addGroup:()=>currentUser&&["admin","user"].includes(currentUser.role),
-  deleteGroup:()=>currentUser&&currentUser.role==="admin",
+  deleteEntry:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
+  addGroup:()=>currentUser&&["admin","supervisor","user"].includes(currentUser.role),
+  deleteGroup:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   exportExcel:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   manageUsers:()=>currentUser&&currentUser.role==="admin",
   editInventory:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   editCustomers:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
-  createDelivery:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
+  createDelivery:()=>currentUser&&["admin","supervisor","user"].includes(currentUser.role),
+  deleteDelivery:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
+  deleteSupplier:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
 };
 
 // LOGIN
@@ -701,7 +721,7 @@ async function onAfterLogin(){
   document.getElementById("btn-export").style.display=can.exportExcel()?"":"none";
   document.getElementById("admin-panel-inbound").style.display=can.manageUsers()?"":"none";
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
-  document.getElementById("btn-add-delivery").style.display=can.createDelivery()?"":"none";
+  document.getElementById("btn-add-delivery").style.display="";
   if(can.manageUsers())renderUsersTable();
   document.getElementById("form-area").style.display="none";
   document.getElementById("records-area").style.display="none";
@@ -740,8 +760,19 @@ async function editUserPrompt(id,name){
   const{error}=await sb.from('users').update({pw}).eq('id',id);
   if(error){toast("更新失敗","error");return;}toast("密碼已更新","success");
 }
+// DELETE LOG
+async function logDelete(table_name, record_id, record_summary){
+  await sb.from('delete_logs').insert({
+    table_name, record_id, record_summary,
+    deleted_by: currentUser.name,
+    deleted_at: new Date().toISOString()
+  });
+}
+
 async function deleteUser(id,name){
+  if(!can.manageUsers())return alert("無刪除權限");
   if(!confirm(`確定刪除帳號「${name}」？`))return;
+  await logDelete('users', id, `帳號：${name}`);
   const{error}=await sb.from('users').delete().eq('id',id);
   if(error){toast("刪除失敗","error");return;}
   await renderUsersTable();await renderAdminUsers();await initLoginScreen();toast("帳號已刪除","info");
@@ -762,8 +793,10 @@ async function createGroup(){
   groups.push(data);renderGroups();toast(`群組「${name}」已建立`,"success");selectGroup(data);
 }
 async function deleteGroup(id,name){
+  if(!can.deleteGroup())return alert("無刪除權限");
   if(!confirm(`確定刪除群組「${name}」？`))return;
   showLoading("刪除中...");
+  await logDelete('groups', id, `群組：${name}`);
   const{error}=await sb.from("groups").delete().eq("id",id);
   hideLoading();if(error){toast("刪除失敗","error");return;}
   groups=groups.filter(g=>g.id!==id);
@@ -818,7 +851,9 @@ async function submitEntry(){
 async function deleteEntry(id,name){
   if(!can.deleteEntry())return alert("無刪除權限");
   if(!confirm(`確定刪除「${name}」？`))return;
-  showLoading("刪除中...");const{error}=await sb.from("entries").delete().eq("id",id);
+  showLoading("刪除中...");
+  await logDelete('entries', id, `進貨記錄：${name}，群組：${currentGroup?.name||''}`);
+  const{error}=await sb.from("entries").delete().eq("id",id);
   hideLoading();if(error){toast("刪除失敗","error");return;}
   toast("已刪除","info");await loadEntries(currentGroup.id);
 }
@@ -996,7 +1031,13 @@ async function addSupplier(){
   if(data&&data.length>0){inp.value='';return;}
   await sb.from('suppliers').insert({group_id:currentGroup.id,name});inp.value='';await renderSupplierList();refreshDatalist();
 }
-async function deleteSupplier(id){await sb.from('suppliers').delete().eq('id',id);await renderSupplierList();refreshDatalist();}
+async function deleteSupplier(id){
+  if(!can.deleteSupplier())return toast("無刪除權限","error");
+  const sup=await sb.from('suppliers').select('name').eq('id',id).single();
+  await logDelete('suppliers', id, `供應商：${sup?.data?.name||id}`);
+  await sb.from('suppliers').delete().eq('id',id);
+  await renderSupplierList();refreshDatalist();
+}
 function selectSupplier(name){const inp=document.getElementById('f-supplier');if(inp)inp.value=name;}
 
 // DASHBOARD
@@ -1080,7 +1121,9 @@ async function saveProduct(){
   toast(editingProductId?"商品已更新":"商品已新增","success");closeProductModal();await loadInventory();
 }
 async function deleteProduct(id,name){
+  if(!can.editInventory())return alert("無刪除權限");
   if(!confirm(`確定刪除商品「${name}」？`))return;
+  await logDelete('products', id, `商品：${name}`);
   const{error}=await sb.from('products').delete().eq('id',id);
   if(error){toast("刪除失敗","error");return;}toast("已刪除","info");await loadInventory();
 }
@@ -1137,7 +1180,9 @@ async function saveCustomer(){
   toast(editingCustomerId?"客戶已更新":"客戶已新增","success");closeCustomerModal();await loadCustomers();
 }
 async function deleteCustomer(id,name){
+  if(!can.editCustomers())return alert("無刪除權限");
   if(!confirm(`確定刪除客戶「${name}」？`))return;
+  await logDelete('customers', id, `客戶：${name}`);
   const{error}=await sb.from('customers').delete().eq('id',id);
   if(error){toast("刪除失敗","error");return;}toast("已刪除","info");await loadCustomers();
 }
@@ -1220,7 +1265,7 @@ function renderDelivery(){
   const canCreate=can.createDelivery();
   wrap.innerHTML=`<table><thead><tr>
     <th>單號</th><th>供應商</th><th>貨物描述</th><th>預計件數</th><th>預計到貨日</th>
-    <th>狀態</th><th>實際到貨時間</th><th>實際件數</th><th>回報人</th><th>備註</th><th>操作</th>
+    <th>狀態</th><th>建立人</th><th>實際到貨時間</th><th>實際件數</th><th>回報人</th><th>備註</th><th>操作</th>
   </tr></thead><tbody>
   ${list.map(d=>{
     const isPending=d.status==='pending';
@@ -1234,13 +1279,14 @@ function renderDelivery(){
       <td class="mono">${d.expected_count||'—'}</td>
       <td class="mono" style="color:${isOverdue?'var(--danger)':'var(--text)'};">${etaStr}${isOverdue?' ⚠️':''}</td>
       <td><span class="tag ${isPending?'tag-yellow':'tag-green'}">${isPending?'⏳ 待到貨':'✅ 已到貨'}</span></td>
+      <td><span class="tag tag-blue">${d.created_by||'—'}</span></td>
       <td class="mono" style="font-size:12px;">${d.arrived_at?(d.arrived_at).substring(0,16):'—'}</td>
       <td class="mono">${d.actual_count!=null?d.actual_count:'—'}</td>
-      <td><span class="tag tag-blue">${d.reporter||'—'}</span></td>
+      <td><span class="tag tag-green">${d.reporter||'—'}</span></td>
       <td style="font-size:12px;color:var(--text2);">${isPending?(d.office_notes||''):(d.field_notes||d.office_notes||'')}</td>
       <td style="white-space:nowrap;">
         ${isPending?`<button class="btn btn-success btn-sm" onclick="openArrivalModal('${d.id}')">✅ 到貨</button>`:''}
-        ${canCreate&&isPending?`<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>`:''}
+        ${isPending?`<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>`:''}
         ${canCreate?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteDelivery('${d.id}','${(d.code||'').replace(/'/g,"\\'")}')">刪除</button>`:''}
       </td>
     </tr>`;
@@ -1249,7 +1295,6 @@ function renderDelivery(){
 }
 
 function openDeliveryModal(id=null){
-  if(!can.createDelivery())return toast("僅辦公室人員可建立到貨單","error");
   editingDeliveryId=id;
   document.getElementById('delivery-modal').classList.add('show');
   if(id){
@@ -1296,8 +1341,9 @@ async function saveDelivery(){
 }
 
 async function deleteDelivery(id,code){
-  if(!can.createDelivery())return;
+  if(!can.deleteDelivery())return alert("無刪除權限");
   if(!confirm(`確定刪除到貨單「${code}」？`))return;
+  await logDelete('deliveries', id, `到貨單：${code}`);
   const{error}=await sb.from('deliveries').delete().eq('id',id);
   if(error){toast("刪除失敗","error");return;}
   toast("已刪除","info");await loadDelivery();
@@ -1334,6 +1380,25 @@ async function submitArrival(){
   hideLoading();
   if(error){toast("回報失敗："+error.message,"error");return;}
   toast("✅ 到貨已回報！","success");closeArrivalModal();await loadDelivery();
+}
+
+// DELETE LOGS VIEW
+async function loadDeleteLogs(){
+  const wrap=document.getElementById('delete-logs-table');
+  if(!wrap)return;
+  wrap.innerHTML='<div class="no-data">⏳ 載入中...</div>';
+  const{data,error}=await sb.from('delete_logs').select('*').order('deleted_at',{ascending:false}).limit(100);
+  if(error){wrap.innerHTML='<div class="no-data" style="color:var(--danger);">載入失敗，請先執行建表 SQL</div>';return;}
+  if(!data?.length){wrap.innerHTML='<div class="no-data">尚無刪除記錄</div>';return;}
+  const tableMap={'entries':'進貨記錄','groups':'群組','products':'商品','customers':'客戶','deliveries':'到貨單','suppliers':'供應商','users':'帳號'};
+  wrap.innerHTML=`<table><thead><tr><th>時間</th><th>資料類別</th><th>刪除內容</th><th>操作人員</th></tr></thead><tbody>
+  ${data.map(l=>`<tr>
+    <td class="mono" style="font-size:12px;">${(l.deleted_at||'').substring(0,16)}</td>
+    <td><span class="tag tag-red">${tableMap[l.table_name]||l.table_name}</span></td>
+    <td style="color:var(--text2);font-size:13px;">${l.record_summary||l.record_id||'—'}</td>
+    <td><span class="tag tag-blue">${l.deleted_by||'—'}</span></td>
+  </tr>`).join('')}
+  </tbody></table>`;
 }
 
 // ENTER NAV
