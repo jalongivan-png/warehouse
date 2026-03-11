@@ -692,7 +692,7 @@ async function initLoginScreen(){
     return `<button type="button" class="user-select-btn${i===0?" selected":""}" onclick="selectUserBtn(this,${i})">
       <span class="usb-name">${u.name}</span><span class="usb-role">${rl}</span></button>`;
   }).join("");
-  document.getElementById("login-hint").innerHTML=users.map(u=>`<b>${u.name}</b> 密碼：${u.pw}`).join("<br>");
+  document.getElementById("login-hint").innerHTML="";
 }
 function selectUserBtn(btn,index){
   document.querySelectorAll(".user-select-btn").forEach(b=>b.classList.remove("selected"));
