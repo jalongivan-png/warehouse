@@ -299,9 +299,9 @@ tr:hover td{background:rgba(79,156,249,.04);}
               <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(79,156,249,.12);border:1px solid rgba(79,156,249,.3);color:var(--accent);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
                 🖼 選擇圖片<input type="file" id="f-photos" accept="image/*" multiple onchange="handlePhotos(event)" style="display:none;">
               </label>
-              <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
-                📷 開啟相機<input type="file" id="f-photos-cam" accept="image/*" onchange="handlePhotos(event)" style="display:none;">
-              </label>
+              <button type="button" onclick="openCamera()" style="display:inline-flex;align-items:center;gap:6px;background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;font-family:'Noto Sans TC',sans-serif;">
+                📷 開啟相機
+              </button>
             </div>
           </div>
           <div class="photo-thumbs" id="photo-thumbs"></div>
@@ -602,6 +602,19 @@ CREATE TABLE IF NOT EXISTS delete_logs (
   </div>
 </div>
 
+<!-- CAMERA MODAL -->
+<div class="modal-overlay" id="camera-modal">
+  <div class="modal-box" style="width:520px;text-align:center;">
+    <div class="modal-title">📷 拍照<button class="modal-close" onclick="closeCamera()">✕</button></div>
+    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000;max-height:65vh;"></video>
+    <canvas id="camera-canvas" style="display:none;"></canvas>
+    <div class="btn-row" style="justify-content:center;margin-top:16px;">
+      <button class="btn btn-ghost" onclick="closeCamera()">取消</button>
+      <button class="btn btn-primary" onclick="takePhoto()">📸 拍照</button>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close">✕</button>
   <img id="lightbox-img" src="" alt="">
@@ -611,7 +624,9 @@ CREATE TABLE IF NOT EXISTS delete_logs (
 // SUPABASE
 const DEFAULT_URL="https://vpctitsrrqdadhpcjgmy.supabase.co";
 const DEFAULT_ANON="sb_publishable_Td7tYn4w5tPBcKQEce85yA_THx70WjF";
+const DEFAULT_PHOTO_BUCKET="entry-photos";
 function getSupabaseConfig(){return{url:localStorage.getItem('sb_url')||DEFAULT_URL,anon:localStorage.getItem('sb_anon')||DEFAULT_ANON};}
+function getPhotoBucket(){return localStorage.getItem('sb_photo_bucket')||DEFAULT_PHOTO_BUCKET;}
 function saveSupabaseConfig(){
   const url=document.getElementById('cfg-url').value.trim();
   const key=document.getElementById('cfg-key').value.trim();
@@ -833,8 +848,15 @@ async function loadEntries(groupId){
 }
 async function submitEntry(){
   const d=getFormData();if(!d.名稱)return alert("請輸入貨物名稱！");
-  lastName=d.名稱;showLoading(editingId?"更新記錄...":"建立記錄...");
+  lastName=d.名稱;showLoading(editingId?"上傳圖片並更新記錄...":"上傳圖片並建立記錄...");
   let error;
+  try{
+    d.photos=await normalizeAndUploadPhotos(editingId||`new-${Date.now()}`);
+  }catch(err){
+    hideLoading();
+    toast("圖片上傳失敗："+(err?.message||err),"error");
+    return;
+  }
   if(editingId){({error}=await sb.from("entries").update({...d,group_id:currentGroup.id,operator:currentUser.name}).eq("id",editingId));}
   else{({error}=await sb.from("entries").insert({...d,group_id:currentGroup.id,operator:currentUser.name}));}
   hideLoading();if(error){toast("儲存失敗："+error.message,"error");return;}
@@ -897,7 +919,7 @@ function getFormData(){
     dims:dimRows.map(r=>({len:parseFloat(r.len)||0,wid:parseFloat(r.wid)||0,hei:parseFloat(r.hei)||0,qty:parseInt(r.qty)||0,bulk:!!r.bulk})),
     cbm:+getTotalCBM().toFixed(6),
     備註:document.getElementById("f-notes").value.trim(),
-    photos:[...pendingPhotos],
+    photos:[],
   };
 }
 async function refreshDatalist(){
@@ -947,15 +969,92 @@ function updateCBMTotal(){
 function getTotalCBM(){return updateCBMTotal();}
 
 // PHOTOS
+let cameraStream=null;
+function makePhotoFilename(prefix="photo"){
+  const rand=Math.random().toString(36).slice(2,8);
+  return `${prefix}-${Date.now()}-${rand}.jpg`;
+}
+function dataUrlToFile(dataUrl, filename=makePhotoFilename("camera")){
+  const parts=dataUrl.split(',');
+  const mime=(parts[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
+  const bin=atob(parts[1]||'');
+  const len=bin.length;
+  const arr=new Uint8Array(len);
+  for(let i=0;i<len;i++)arr[i]=bin.charCodeAt(i);
+  return new File([arr], filename, {type:mime});
+}
+function isRemotePhoto(v){return typeof v==='string'&&/^https?:\/\//i.test(v);}
+function getPhotoPreviewSrc(item){
+  if(typeof item==='string')return item;
+  if(item instanceof File)return URL.createObjectURL(item);
+  return '';
+}
+async function normalizeAndUploadPhotos(recordKey){
+  const bucket=getPhotoBucket();
+  const uploaded=[];
+  for(let i=0;i<pendingPhotos.length;i++){
+    const item=pendingPhotos[i];
+    if(isRemotePhoto(item)){uploaded.push(item);continue;}
+    let file=item;
+    if(typeof item==='string'&&item.startsWith('data:image/')) file=dataUrlToFile(item, makePhotoFilename('legacy'));
+    if(!(file instanceof File)) continue;
+    const safeGroup=(currentGroup?.id||'nogroup').replace(/[^a-zA-Z0-9_-]/g,'_');
+    const safeName=(file.name||makePhotoFilename('upload')).replace(/[^a-zA-Z0-9._-]/g,'_');
+    const path=`${safeGroup}/${recordKey}/${Date.now()}-${i}-${safeName}`;
+    const {error}=await sb.storage.from(bucket).upload(path,file,{cacheControl:'3600',upsert:false,contentType:file.type||'image/jpeg'});
+    if(error) throw error;
+    const {data}=sb.storage.from(bucket).getPublicUrl(path);
+    if(!data?.publicUrl) throw new Error('無法取得圖片網址');
+    uploaded.push(data.publicUrl);
+  }
+  pendingPhotos=[...uploaded];
+  renderThumbs();
+  return uploaded;
+}
 function handlePhotos(e){
-  let done=0;const files=Array.from(e.target.files);
-  files.forEach(f=>{const r=new FileReader();r.onload=ev=>{pendingPhotos.push(ev.target.result);done++;if(done===files.length)renderThumbs();};r.readAsDataURL(f);});
-  e.target.value="";
+  const files=Array.from(e.target.files||[]).filter(f=>String(f.type||'').startsWith('image/'));
+  pendingPhotos.push(...files);
+  renderThumbs();
+  e.target.value='';
 }
 function removePhoto(i){pendingPhotos.splice(i,1);renderThumbs();}
 function renderThumbs(){
-  document.getElementById("photo-thumbs").innerHTML=pendingPhotos.map((src,i)=>
-    `<div class="thumb-wrap"><img src="${src}" onclick="openLightbox('${src}')"><button class="thumb-del" onclick="removePhoto(${i})">✕</button></div>`).join("");
+  document.getElementById('photo-thumbs').innerHTML=pendingPhotos.map((item,i)=>{
+    const src=getPhotoPreviewSrc(item);
+    const safeSrc=String(src).replace(/'/g,"&#39;");
+    const label=(item instanceof File)?'<div style="position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;padding:1px 4px;border-radius:4px;">未上傳</div>':'';
+    return `<div class="thumb-wrap">${label}<img src="${src}" onclick="openLightbox('${safeSrc}')"><button class="thumb-del" onclick="removePhoto(${i})">✕</button></div>`;
+  }).join('');
+}
+async function openCamera(){
+  try{
+    const modal=document.getElementById('camera-modal');
+    const video=document.getElementById('camera-video');
+    modal.classList.add('show');
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    video.srcObject=cameraStream;
+  }catch(err){
+    alert('無法開啟相機：'+(err?.message||err));
+  }
+}
+function closeCamera(){
+  document.getElementById('camera-modal').classList.remove('show');
+  if(cameraStream){cameraStream.getTracks().forEach(track=>track.stop());cameraStream=null;}
+}
+function takePhoto(){
+  const video=document.getElementById('camera-video');
+  const canvas=document.getElementById('camera-canvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=video.videoWidth||1280;
+  canvas.height=video.videoHeight||720;
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  canvas.toBlob(blob=>{
+    if(!blob)return;
+    const file=new File([blob], makePhotoFilename('camera'), {type:'image/jpeg'});
+    pendingPhotos.push(file);
+    renderThumbs();
+    closeCamera();
+  },'image/jpeg',0.9);
 }
 function openLightbox(src){document.getElementById("lightbox-img").src=src;document.getElementById("lightbox").classList.add("show");}
 function closeLightbox(){document.getElementById("lightbox").classList.remove("show");}
