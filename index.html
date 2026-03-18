@@ -604,9 +604,9 @@ CREATE TABLE IF NOT EXISTS delete_logs (
 
 <!-- CAMERA MODAL -->
 <div class="modal-overlay" id="camera-modal">
-  <div class="modal-box" style="width:520px;text-align:center;">
+  <div class="modal-box" style="width:min(860px,95vw);text-align:center;">
     <div class="modal-title">📷 拍照<button class="modal-close" onclick="closeCamera()">✕</button></div>
-    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000;max-height:65vh;"></video>
+    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000;max-height:75vh;"></video>
     <canvas id="camera-canvas" style="display:none;"></canvas>
     <div class="btn-row" style="justify-content:center;margin-top:16px;">
       <button class="btn btn-ghost" onclick="closeCamera()">取消</button>
@@ -1031,7 +1031,7 @@ async function openCamera(){
     const modal=document.getElementById('camera-modal');
     const video=document.getElementById('camera-video');
     modal.classList.add('show');
-    cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    cameraStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}},audio:false});
     video.srcObject=cameraStream;
   }catch(err){
     alert('無法開啟相機：'+(err?.message||err));
