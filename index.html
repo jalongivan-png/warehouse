@@ -1027,15 +1027,24 @@ function renderThumbs(){
   }).join('');
 }
 async function openCamera(){
-  try{
-    const modal=document.getElementById('camera-modal');
-    const video=document.getElementById('camera-video');
-    modal.classList.add('show');
-    cameraStream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720}},audio:false});
-    video.srcObject=cameraStream;
-  }catch(err){
-    alert('無法開啟相機：'+(err?.message||err));
+  const modal=document.getElementById('camera-modal');
+  const video=document.getElementById('camera-video');
+  const constraints=[
+    {video:{width:{ideal:1280},height:{ideal:720}},audio:false},
+    {video:{width:{ideal:640},height:{ideal:480}},audio:false},
+    {video:true,audio:false},
+  ];
+  let stream=null;
+  for(const c of constraints){
+    try{stream=await navigator.mediaDevices.getUserMedia(c);break;}catch(e){stream=null;}
   }
+  if(!stream){
+    toast('\u26a0\ufe0f \u76f8\u6a5f\u7121\u6cd5\u958b\u555f\uff0c\u8acb\u78ba\u8a8d\u76f8\u6a5f\u672a\u88ab\u5176\u4ed6\u7a0b\u5f0f\u4f54\u7528\uff0c\u6216\u91cd\u65b0\u6574\u7406\u5f8c\u518d\u8a66','error');
+    return;
+  }
+  cameraStream=stream;
+  video.srcObject=stream;
+  modal.classList.add('show');
 }
 function closeCamera(){
   document.getElementById('camera-modal').classList.remove('show');
