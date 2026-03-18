@@ -604,11 +604,24 @@ CREATE TABLE IF NOT EXISTS delete_logs (
 
 <!-- CAMERA MODAL -->
 <div class="modal-overlay" id="camera-modal">
-  <div class="modal-box" style="width:min(860px,95vw);text-align:center;">
+  <div class="modal-box" style="width:min(900px,95vw);text-align:center;">
     <div class="modal-title">📷 拍照<button class="modal-close" onclick="closeCamera()">✕</button></div>
-    <video id="camera-video" autoplay playsinline style="width:100%;border-radius:10px;background:#000;max-height:75vh;"></video>
+    <!-- 縮放容器：overflow hidden 裁切超出範圍 -->
+    <div id="camera-viewport" style="width:100%;overflow:hidden;border-radius:10px;background:#000;position:relative;aspect-ratio:16/9;">
+      <video id="camera-video" autoplay playsinline
+        style="width:100%;height:100%;object-fit:cover;display:block;transform-origin:center center;transition:transform .1s;"></video>
+    </div>
     <canvas id="camera-canvas" style="display:none;"></canvas>
-    <div class="btn-row" style="justify-content:center;margin-top:16px;">
+    <!-- 縮放滑桿 -->
+    <div style="display:flex;align-items:center;gap:12px;margin-top:14px;padding:0 4px;">
+      <span style="font-size:18px;cursor:pointer;user-select:none;" onclick="setZoom(cameraZoom-0.1)">🔍−</span>
+      <input type="range" id="zoom-slider" min="1" max="4" step="0.05" value="1"
+        oninput="setZoom(parseFloat(this.value))"
+        style="flex:1;accent-color:var(--accent);height:6px;cursor:pointer;">
+      <span style="font-size:18px;cursor:pointer;user-select:none;" onclick="setZoom(cameraZoom+0.1)">🔍+</span>
+      <span id="zoom-label" style="font-family:'DM Mono',monospace;font-size:13px;color:var(--accent);min-width:38px;text-align:right;">1.0×</span>
+    </div>
+    <div class="btn-row" style="justify-content:center;margin-top:12px;">
       <button class="btn btn-ghost" onclick="closeCamera()">取消</button>
       <button class="btn btn-primary" onclick="takePhoto()">📸 拍照</button>
     </div>
@@ -970,6 +983,16 @@ function getTotalCBM(){return updateCBMTotal();}
 
 // PHOTOS
 let cameraStream=null;
+let cameraZoom=1;
+function setZoom(v){
+  cameraZoom=Math.min(4,Math.max(1,+v.toFixed(2)));
+  const video=document.getElementById('camera-video');
+  if(video)video.style.transform=`scale(${cameraZoom})`;
+  const slider=document.getElementById('zoom-slider');
+  if(slider)slider.value=cameraZoom;
+  const label=document.getElementById('zoom-label');
+  if(label)label.textContent=cameraZoom.toFixed(1)+'×';
+}
 function makePhotoFilename(prefix="photo"){
   const rand=Math.random().toString(36).slice(2,8);
   return `${prefix}-${Date.now()}-${rand}.jpg`;
@@ -1039,11 +1062,12 @@ async function openCamera(){
     try{stream=await navigator.mediaDevices.getUserMedia(c);break;}catch(e){stream=null;}
   }
   if(!stream){
-    toast('\u26a0\ufe0f \u76f8\u6a5f\u7121\u6cd5\u958b\u555f\uff0c\u8acb\u78ba\u8a8d\u76f8\u6a5f\u672a\u88ab\u5176\u4ed6\u7a0b\u5f0f\u4f54\u7528\uff0c\u6216\u91cd\u65b0\u6574\u7406\u5f8c\u518d\u8a66','error');
+    toast('⚠️ 相機無法開啟，請確認相機未被其他程式佔用','error');
     return;
   }
   cameraStream=stream;
   video.srcObject=stream;
+  setZoom(1);
   modal.classList.add('show');
 }
 function closeCamera(){
@@ -1054,9 +1078,17 @@ function takePhoto(){
   const video=document.getElementById('camera-video');
   const canvas=document.getElementById('camera-canvas');
   const ctx=canvas.getContext('2d');
-  canvas.width=video.videoWidth||1280;
-  canvas.height=video.videoHeight||720;
-  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const vw=video.videoWidth||1280;
+  const vh=video.videoHeight||720;
+  const z=cameraZoom;
+  // 計算縮放後要裁切的中央區域
+  const cropW=vw/z;
+  const cropH=vh/z;
+  const cropX=(vw-cropW)/2;
+  const cropY=(vh-cropH)/2;
+  canvas.width=Math.round(cropW);
+  canvas.height=Math.round(cropH);
+  ctx.drawImage(video,cropX,cropY,cropW,cropH,0,0,canvas.width,canvas.height);
   canvas.toBlob(blob=>{
     if(!blob)return;
     const file=new File([blob], makePhotoFilename('camera'), {type:'image/jpeg'});
