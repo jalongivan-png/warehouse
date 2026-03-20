@@ -877,10 +877,9 @@ async function onAfterLogin(){
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
   document.getElementById("btn-add-delivery").style.display="";
   if(can.manageUsers())renderUsersTable();
-  document.getElementById("records-area").style.display="none";
-  document.getElementById("no-group-hint").style.display="block";
-  await loadGroups();
-  resetForm();
+  await loadGroups();   // 先等群組載入完
+  resetForm();          // 再填表單（此時 groups 已有資料）
+  refreshFilterDropdown(); // 同步更新篩選下拉
   loadFormLibrary();
   loadDashboard();
 }
@@ -984,11 +983,21 @@ function selectGroup(g){
   if(fsel){fsel.value=g.id;loadEntries(g.id);}
 }
 function refreshFilterDropdown(){
+  // 更新進倉記錄頁的篩選下拉
   const fsel=document.getElementById("filter-group");
-  if(!fsel)return;
-  const cur=fsel.value;
-  fsel.innerHTML=`<option value="all">全部群組</option>`+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
-  if(cur)fsel.value=cur;
+  if(fsel){
+    const cur=fsel.value;
+    fsel.innerHTML=`<option value="all">全部群組</option>`+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    if(cur)fsel.value=cur;
+  }
+  // 更新進倉表單的「儲存到群組」下拉
+  const tsel=document.getElementById("f-target-group");
+  if(tsel){
+    const cur=tsel.value;
+    tsel.innerHTML=groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+    if(cur&&groups.find(g=>g.id===cur))tsel.value=cur;
+    else if(groups.length)tsel.value=groups[0].id;
+  }
 }
 function onFilterGroupChange(){
   const val=document.getElementById("filter-group")?.value;
@@ -1082,11 +1091,7 @@ function resetForm(){
   ["f-name","f-supplier","f-count","f-gross","f-tare","f-notes","f-price"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("f-name").value=lastName;document.getElementById("net-display").textContent="—";
   dimRows=[];addDimRow();pendingPhotos=[];renderThumbs();
-  // 填入群組下拉選單，預設選目前群組
-  const sel=document.getElementById("f-target-group");
-  if(sel){
-    sel.innerHTML=groups.map(g=>`<option value="${g.id}"${g.id===currentGroup?.id?' selected':''}>${g.name}</option>`).join('');
-  }
+  refreshFilterDropdown();
 }
 function cancelEdit(){editingId=null;document.getElementById("form-title").textContent="新增進倉記錄";document.getElementById("submit-btn").textContent="📌 建立記錄";resetForm();}
 function calcNet(){
