@@ -464,19 +464,22 @@ tr:hover td{background:rgba(79,156,249,.04);}
 
 <!-- PAGE: PHOTO LIBRARY -->
 <div class="page" id="page-photolibrary">
-  <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
-    <div>
-      <h2 style="font-size:18px;font-weight:700;">📷 照片上傳</h2>
-      <p style="color:var(--text2);font-size:13px;margin-top:4px;">手機拍照後上傳至照片庫，POS/PC 可在進貨表單中選用</p>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <label style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border-radius:8px;padding:9px 18px;cursor:pointer;font-size:14px;font-weight:600;">
-        📷 拍照 / 選圖上傳
-        <input type="file" id="pl-upload-input" accept="image/*" multiple capture="environment" onchange="plHandleUpload(event)" style="display:none;">
-      </label>
-      <button class="btn btn-ghost btn-sm" onclick="loadPhotoLibrary()">🔄 重新整理</button>
-    </div>
-  </div>
+
+  <!-- 手機版：超大拍照按鈕，一點即拍 -->
+  <label id="pl-shoot-btn" style="display:block;width:100%;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:20px;padding:36px 20px;text-align:center;cursor:pointer;margin-bottom:16px;box-shadow:0 8px 32px rgba(79,156,249,.35);transition:opacity .2s;active:opacity:.85;">
+    <div style="font-size:56px;line-height:1;">📷</div>
+    <div style="font-size:20px;font-weight:700;color:white;margin-top:10px;">點此拍照上傳</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.7);margin-top:4px;">拍完即自動上傳，無需額外操作</div>
+    <input type="file" accept="image/*" capture="environment" onchange="plHandleUpload(event)" style="display:none;">
+  </label>
+
+  <!-- 從相簿多選（補充用） -->
+  <label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:rgba(34,197,94,.1);border:2px dashed var(--success);border-radius:14px;padding:14px;text-align:center;cursor:pointer;margin-bottom:20px;">
+    <span style="font-size:22px;">🖼️</span>
+    <span style="font-size:14px;font-weight:600;color:var(--success);">從相簿選取（可多選）</span>
+    <input type="file" accept="image/*" multiple onchange="plHandleUpload(event)" style="display:none;">
+  </label>
+
   <!-- 上傳進度 -->
   <div id="pl-progress" style="display:none;margin-bottom:16px;">
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 18px;">
@@ -484,15 +487,19 @@ tr:hover td{background:rgba(79,156,249,.04);}
         <span style="font-size:13px;color:var(--text2);" id="pl-progress-text">上傳中...</span>
         <span style="font-size:13px;font-family:'DM Mono',monospace;color:var(--accent);" id="pl-progress-pct">0%</span>
       </div>
-      <div style="background:var(--surface2);border-radius:4px;height:6px;">
-        <div id="pl-progress-bar" style="background:linear-gradient(90deg,var(--accent),var(--accent2));height:6px;border-radius:4px;width:0%;transition:width .3s;"></div>
+      <div style="background:var(--surface2);border-radius:4px;height:10px;border-radius:6px;overflow:hidden;">
+        <div id="pl-progress-bar" style="background:linear-gradient(90deg,var(--accent),var(--accent2));height:10px;width:0%;transition:width .3s;"></div>
       </div>
     </div>
   </div>
-  <!-- 照片庫網格 -->
+
+  <!-- 照片庫 -->
   <div class="card">
-    <div class="card-title"><span class="bar bar-blue"></span>照片庫 <span id="pl-count" style="color:var(--text3);font-size:12px;font-weight:400;margin-left:6px;"></span></div>
-    <div id="pl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+      <div class="card-title" style="margin-bottom:0;"><span class="bar bar-blue"></span>已上傳照片 <span id="pl-count" style="color:var(--text3);font-size:12px;font-weight:400;margin-left:6px;"></span></div>
+      <button class="btn btn-ghost btn-sm" onclick="loadPhotoLibrary()">🔄 重新整理</button>
+    </div>
+    <div id="pl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
       <div class="no-data" style="grid-column:1/-1;">⏳ 載入中...</div>
     </div>
   </div>
