@@ -1253,11 +1253,11 @@ function renderTable(){
   const list=entries.filter(e=>!q||e.名稱?.toLowerCase().includes(q)||(e.供應商||"").toLowerCase().includes(q)||(e.備註||"").toLowerCase().includes(q));
   const wrap=document.getElementById("table-wrap");
   if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;return;}
-  let totalCBM=0,totalNet=0;const showDel=can.deleteEntry();
-  let html=`<table><thead><tr><th>日期時間</th><th>群組</th><th>名稱</th><th>供應商</th><th>件數</th><th>淨重(kg)</th><th>總CBM</th><th>單價</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  const showDel=can.deleteEntry();
+  let html=`<table><thead><tr><th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
   list.forEach(e=>{
-    totalCBM+=(e.cbm||0);totalNet+=(e.淨重||0);
-    const grpName=groups.find(g=>g.id===e.group_id)?.name||'—';
+    // 取第一筆材積資料顯示
+    const dim=(e.dims&&e.dims.length>0)?e.dims[0]:{};
     const photos=e.photos||[];
     const photoHtml=photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${photos.map(url=>{
@@ -1267,11 +1267,14 @@ function renderTable(){
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
-      <td><span class="tag tag-blue">${grpName}</span></td>
-      <td style="font-weight:600;">${e.名稱||""}</td><td>${e.供應商||"—"}</td>
-      <td class="mono">${e.件數||"—"}</td><td class="mono">${e.淨重??""}</td>
-      <td class="mono" style="color:var(--accent);">${e.cbm?e.cbm.toFixed(4):"—"}</td>
-      <td class="mono">${e.單價?'$'+e.單價:"—"}</td>
+      <td style="font-weight:600;">${e.名稱||"—"}</td>
+      <td>${e.供應商||"—"}</td>
+      <td class="mono">${e.件數||"—"}</td>
+      <td class="mono">${dim.len||"—"}</td>
+      <td class="mono">${dim.wid||"—"}</td>
+      <td class="mono">${dim.hei||"—"}</td>
+      <td class="mono">${e.總重||"—"}</td>
+      <td class="mono">${e.板重||"—"}</td>
       <td>${photoHtml}</td>
       <td><span class="tag tag-blue">${e.operator||"—"}</span></td>
       <td style="color:var(--text2);font-size:12px;">${e.備註||""}</td>
@@ -1281,10 +1284,7 @@ function renderTable(){
         ${showDel?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteEntry('${e.id}','${(e.名稱||"").replace(/'/g,"\\'")}')">刪除</button>`:""}
       </td></tr>`;
   });
-  html+=`</tbody><tfoot><tr style="background:rgba(34,197,94,.05);font-weight:600;color:var(--success);">
-    <td colspan="4">合計 ${list.length} 筆</td><td class="mono">${totalNet.toFixed(3)}</td>
-    <td class="mono">${totalCBM.toFixed(4)}</td><td colspan="4"></td>
-  </tr></tfoot></table>`;
+  html+=`</tbody></table>`;
   wrap.innerHTML=html;
 }
 function exportExcel(){
