@@ -316,14 +316,14 @@ tr:hover td{background:rgba(79,156,249,.04);}
 
 <!-- PAGE: INBOUND -->
 <div class="page" id="page-inbound">
-  <div class="section-title">進貨群組</div>
-  <div class="groups-row" id="groups-row"></div>
   <div class="admin-panel" id="admin-panel-inbound" style="display:none;">
     <div style="font-size:12px;color:var(--danger);font-weight:600;letter-spacing:.06em;margin-bottom:12px;">🔑 使用者管理</div>
     <table class="users-table"><thead><tr><th>名稱</th><th>角色</th><th>操作</th></tr></thead><tbody id="users-tbody"></tbody></table>
     <div style="margin-top:10px;"><button class="btn btn-danger btn-sm" onclick="addUserPrompt()">＋ 新增帳號</button></div>
   </div>
-  <div id="form-area" style="display:none;">
+
+  <!-- 進倉表單（永遠顯示） -->
+  <div id="form-area">
     <div class="card fade-in">
       <div class="card-title"><span class="bar bar-blue"></span><span id="form-title">新增進倉記錄</span></div>
       <div class="form-grid">
@@ -362,9 +362,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
         <div class="form-group full"><label>📝 備註</label><textarea id="f-notes" placeholder="備註事項..."></textarea></div>
         <div class="form-group full">
           <label>📷 附加圖片</label>
-          <!-- 已選圖片縮圖 -->
           <div class="photo-thumbs" id="photo-thumbs" style="margin-bottom:10px;"></div>
-          <!-- 照片庫選取區 -->
           <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <span style="font-size:13px;color:var(--text2);font-weight:500;">📚 從照片庫選取</span>
@@ -391,19 +389,25 @@ tr:hover td{background:rgba(79,156,249,.04);}
       </div>
     </div>
   </div>
-  <div id="no-group-hint" style="text-align:center;color:var(--text3);padding:60px 0;font-size:15px;">← 請先選擇或新增一個群組</div>
-  <div id="records-area" style="display:none;">
-    <div class="card fade-in">
-      <div class="records-topbar">
-        <div class="card-title" style="margin-bottom:0;"><span class="bar bar-green"></span><span id="table-title">進倉記錄</span></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input class="search-input" type="text" id="search-input" placeholder="🔍 搜尋..." oninput="renderTable()">
-          <button class="btn btn-ghost btn-sm" onclick="loadEntries(currentGroup.id)">🔄</button>
-          <button class="btn btn-success btn-sm" id="btn-export" onclick="exportExcel()" style="display:none;">⬇ 匯出</button>
+
+  <!-- 群組記錄區 -->
+  <div style="margin-top:8px;">
+    <div class="section-title">進貨群組 — 點選查看記錄</div>
+    <div class="groups-row" id="groups-row"></div>
+    <div id="records-area" style="display:none;">
+      <div class="card fade-in">
+        <div class="records-topbar">
+          <div class="card-title" style="margin-bottom:0;"><span class="bar bar-green"></span><span id="table-title">進倉記錄</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input class="search-input" type="text" id="search-input" placeholder="🔍 搜尋..." oninput="renderTable()">
+            <button class="btn btn-ghost btn-sm" onclick="loadEntries(currentGroup.id)">🔄</button>
+            <button class="btn btn-success btn-sm" id="btn-export" onclick="exportExcel()" style="display:none;">⬇ 匯出</button>
+          </div>
         </div>
+        <div class="table-wrap" id="table-wrap"></div>
       </div>
-      <div class="table-wrap" id="table-wrap"></div>
     </div>
+    <div id="no-group-hint" style="text-align:center;color:var(--text3);padding:30px 0;font-size:14px;">↑ 點選群組查看該群組的進倉記錄</div>
   </div>
 </div>
 
@@ -858,10 +862,12 @@ async function onAfterLogin(){
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
   document.getElementById("btn-add-delivery").style.display="";
   if(can.manageUsers())renderUsersTable();
-  document.getElementById("form-area").style.display="none";
   document.getElementById("records-area").style.display="none";
   document.getElementById("no-group-hint").style.display="block";
-  await loadGroups();loadDashboard();
+  await loadGroups();
+  resetForm();
+  loadFormLibrary();
+  loadDashboard();
 }
 
 // USER MANAGEMENT
@@ -955,14 +961,14 @@ function renderGroups(){
 }
 function selectGroup(g){
   if(typeof g==="string")g=groups.find(x=>x.id===g);
-  currentGroup=g;editingId=null;pendingPhotos=[];
-  document.getElementById("form-area").style.display="block";
+  currentGroup=g;editingId=null;
   document.getElementById("records-area").style.display="block";
   document.getElementById("no-group-hint").style.display="none";
   document.getElementById("table-title").textContent=`${g.name} — 進倉記錄`;
-  document.getElementById("form-title").textContent="新增進倉記錄";
-  document.getElementById("submit-btn").textContent="📌 建立記錄";
-  resetForm();renderGroups();loadEntries(g.id);refreshDatalist();loadFormLibrary();
+  renderGroups();loadEntries(g.id);
+  // 更新群組下拉選單選到此群組
+  const sel=document.getElementById("f-target-group");
+  if(sel) sel.value=g.id;
 }
 
 // ENTRIES
@@ -1195,15 +1201,23 @@ function renderTable(){
   const wrap=document.getElementById("table-wrap");
   if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;return;}
   let totalCBM=0,totalNet=0;const showDel=can.deleteEntry();
-  let html=`<table><thead><tr><th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th><th>淨重(kg)</th><th>總CBM</th><th>單價</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  let html=`<table><thead><tr><th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th><th>淨重(kg)</th><th>總CBM</th><th>單價</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
   list.forEach(e=>{
     totalCBM+=(e.cbm||0);totalNet+=(e.淨重||0);
+    const photos=e.photos||[];
+    const photoHtml=photos.length
+      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${photos.map(url=>{
+          const safe=String(url).replace(/'/g,"&#39;");
+          return `<img src="${url}" onclick="openLightbox('${safe}')" style="width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;">`;
+        }).join('')}</div>`
+      : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
       <td style="font-weight:600;">${e.名稱||""}</td><td>${e.供應商||"—"}</td>
       <td class="mono">${e.件數||"—"}</td><td class="mono">${e.淨重??""}</td>
       <td class="mono" style="color:var(--accent);">${e.cbm?e.cbm.toFixed(4):"—"}</td>
       <td class="mono">${e.單價?'$'+e.單價:"—"}</td>
+      <td>${photoHtml}</td>
       <td><span class="tag tag-blue">${e.operator||"—"}</span></td>
       <td style="color:var(--text2);font-size:12px;">${e.備註||""}</td>
       <td style="white-space:nowrap;">
