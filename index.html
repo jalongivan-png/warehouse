@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
 <title>倉儲批發管理系統</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
@@ -184,8 +184,74 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .form-grid{grid-template-columns:1fr;}
   .form-group.full{grid-column:1;}
   .stats-row{grid-template-columns:1fr 1fr;}
-  .page{padding:16px 12px;}
+  .page{padding:10px 8px;}
   .nav-tabs .nav-tab .tab-lbl{display:none;}
+
+  /* 導覽列縮小 */
+  .nav-tab{padding:10px 10px;}
+  .nav-logo{padding:8px 10px 8px 0;margin-right:6px;}
+  .nav-logo-icon{width:28px;height:28px;font-size:14px;}
+  .nav-logo-text h1{font-size:12px;}
+  .nav-logo-text p{display:none;}
+  .user-pill{padding:4px 8px 4px 4px;}
+  .up-avatar{width:22px;height:22px;font-size:10px;}
+  .up-name{font-size:11px;}
+  .logout-btn{padding:4px 8px;font-size:11px;}
+
+  /* 表單輸入框縮小 */
+  input[type=text],input[type=number],input[type=datetime-local],input[type=date],select,textarea{
+    padding:8px 10px;font-size:14px;
+  }
+  label{font-size:12px;}
+  .form-group{gap:3px;}
+  .form-grid{gap:8px;}
+  .card{padding:14px 12px;margin-bottom:12px;}
+  .card-title{font-size:12px;margin-bottom:12px;}
+
+  /* 材積表格手機版 */
+  .dim-table{font-size:12px;}
+  .dim-table th{padding:5px 3px;font-size:10px;}
+  .dim-table td{padding:3px 2px;}
+  .dim-table input[type=number]{padding:5px 4px;font-size:13px;}
+
+  /* 按鈕 */
+  .btn{padding:8px 14px;font-size:13px;}
+  .btn-row{gap:8px;margin-top:12px;}
+  .btn-add-dim{font-size:12px;padding:5px 10px;}
+  .dim-total{font-size:13px;padding:5px 10px;}
+
+  /* 統計卡片 */
+  .stat-card{padding:12px 14px;gap:10px;}
+  .stat-icon{width:36px;height:36px;font-size:16px;}
+  .stat-num{font-size:20px;}
+  .stat-label{font-size:11px;}
+
+  /* 照片庫選取區手機版 */
+  #fl-grid{grid-template-columns:repeat(auto-fill,minmax(70px,1fr));max-height:200px;}
+
+  /* 進貨表單照片區 */
+  .photo-thumbs .thumb-wrap{width:56px;height:56px;}
+
+  /* 群組chip */
+  .group-chip{padding:5px 10px;font-size:12px;}
+  .btn-new-group{padding:5px 10px;font-size:12px;}
+
+  /* table 手機字體 */
+  table{font-size:12px;}
+  th{padding:7px 8px;}
+  td{padding:6px 8px;}
+
+  /* records topbar */
+  .records-topbar{flex-direction:column;align-items:flex-start;}
+  .search-input{width:100%;}
+}
+
+/* 超小螢幕 */
+@media(max-width:380px){
+  .stats-row{grid-template-columns:1fr;}
+  input[type=text],input[type=number],input[type=datetime-local],input[type=date],select,textarea{
+    font-size:16px; /* 防止 iOS 自動放大 */
+  }
 }
 </style>
 </head>
