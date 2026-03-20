@@ -817,6 +817,7 @@ function doLogin(){
   if(!user){document.getElementById("login-err").textContent="❌ 帳號不存在";return;}
   if(user.pw!==pw){document.getElementById("login-err").textContent="❌ 密碼錯誤";return;}
   currentUser={name:user.name,role:user.role};
+  localStorage.setItem('current_user', JSON.stringify(currentUser));
   document.getElementById("login-screen").style.display="none";
   document.getElementById("main-app").style.display="block";
   document.getElementById("login-username").value="";
@@ -826,6 +827,7 @@ function doLogin(){
 }
 function doLogout(){
   currentUser=null;currentGroup=null;entries=[];selectedLoginUser=null;
+  localStorage.removeItem('current_user');
   document.getElementById("main-app").style.display="none";
   document.getElementById("login-screen").style.display="flex";
   document.getElementById("login-username").value="";
@@ -1748,7 +1750,27 @@ function flTogglePhoto(url) {
 // INIT
 document.addEventListener('DOMContentLoaded',async()=>{
   await loadUsers();
-  await initLoginScreen();setupEnterNavigation();
+  // 嘗試從 localStorage 恢復登入狀態
+  const saved = localStorage.getItem('current_user');
+  if(saved){
+    try{
+      const savedUser = JSON.parse(saved);
+      // 確認帳號仍存在於資料庫
+      const match = _cachedUsers.find(u => u.name === savedUser.name);
+      if(match){
+        currentUser = {name: match.name, role: match.role};
+        document.getElementById("login-screen").style.display="none";
+        document.getElementById("main-app").style.display="block";
+        await onAfterLogin();
+        setupEnterNavigation();
+        const sinp=document.getElementById('new-supplier-input');
+        if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
+        return;
+      }
+    }catch(e){ localStorage.removeItem('current_user'); }
+  }
+  await initLoginScreen();
+  setupEnterNavigation();
   const sinp=document.getElementById('new-supplier-input');
   if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
 });
