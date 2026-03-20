@@ -322,7 +322,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <div style="margin-top:10px;"><button class="btn btn-danger btn-sm" onclick="addUserPrompt()">＋ 新增帳號</button></div>
   </div>
 
-  <!-- 進倉表單（永遠顯示） -->
+  <!-- 進倉表單 -->
   <div id="form-area">
     <div class="card fade-in">
       <div class="card-title"><span class="bar bar-blue"></span><span id="form-title">新增進倉記錄</span></div>
@@ -390,24 +390,33 @@ tr:hover td{background:rgba(79,156,249,.04);}
     </div>
   </div>
 
-  <!-- 群組記錄區 -->
-  <div style="margin-top:8px;">
-    <div class="section-title">進貨群組 — 點選查看記錄</div>
-    <div class="groups-row" id="groups-row"></div>
-    <div id="records-area" style="display:none;">
-      <div class="card fade-in">
-        <div class="records-topbar">
-          <div class="card-title" style="margin-bottom:0;"><span class="bar bar-green"></span><span id="table-title">進倉記錄</span></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-            <input class="search-input" type="text" id="search-input" placeholder="🔍 搜尋..." oninput="renderTable()">
-            <button class="btn btn-ghost btn-sm" onclick="loadEntries(currentGroup.id)">🔄</button>
-            <button class="btn btn-success btn-sm" id="btn-export" onclick="exportExcel()" style="display:none;">⬇ 匯出</button>
-          </div>
-        </div>
-        <div class="table-wrap" id="table-wrap"></div>
+  <!-- 進倉記錄（同頁顯示，依群組篩選） -->
+  <div class="card fade-in" style="margin-top:8px;">
+    <div class="records-topbar">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="card-title" style="margin-bottom:0;"><span class="bar bar-green"></span>進倉記錄</div>
+        <!-- 群組篩選 -->
+        <select id="filter-group" onchange="onFilterGroupChange()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 10px;font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;">
+          <option value="all">全部群組</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <input class="search-input" type="text" id="search-input" placeholder="🔍 搜尋..." oninput="renderTable()">
+        <button class="btn btn-ghost btn-sm" onclick="loadAllEntries()">🔄</button>
+        <button class="btn btn-success btn-sm" id="btn-export" onclick="exportExcel()" style="display:none;">⬇ 匯出</button>
       </div>
     </div>
-    <div id="no-group-hint" style="text-align:center;color:var(--text3);padding:30px 0;font-size:14px;">↑ 點選群組查看該群組的進倉記錄</div>
+    <div class="table-wrap" id="table-wrap"></div>
+  </div>
+
+  <!-- 群組管理（折疊區） -->
+  <div style="margin-top:8px;">
+    <div class="section-title" style="cursor:pointer;" onclick="toggleGroupsPanel()">
+      📁 群組管理 <span id="groups-panel-arrow" style="color:var(--text3);font-size:11px;">▼ 展開</span>
+    </div>
+    <div id="groups-panel" style="display:none;">
+      <div class="groups-row" id="groups-row"></div>
+    </div>
   </div>
 </div>
 
@@ -924,7 +933,7 @@ async function loadGroups(){
   showLoading("載入群組...");
   const{data,error}=await sb.from("groups").select("*").order("created_at");
   hideLoading();if(error){toast("載入群組失敗","error");return;}
-  groups=data||[];renderGroups();
+  groups=data||[];renderGroups();refreshFilterDropdown();loadAllEntries();
 }
 async function createGroup(){
   const name=prompt("輸入群組名稱：");if(!name?.trim())return;
@@ -962,13 +971,42 @@ function renderGroups(){
 function selectGroup(g){
   if(typeof g==="string")g=groups.find(x=>x.id===g);
   currentGroup=g;editingId=null;
-  document.getElementById("records-area").style.display="block";
-  document.getElementById("no-group-hint").style.display="none";
-  document.getElementById("table-title").textContent=`${g.name} — 進倉記錄`;
-  renderGroups();loadEntries(g.id);
-  // 更新群組下拉選單選到此群組
+  renderGroups();
   const sel=document.getElementById("f-target-group");
   if(sel) sel.value=g.id;
+  const fsel=document.getElementById("filter-group");
+  if(fsel){fsel.value=g.id;loadEntries(g.id);}
+}
+function refreshFilterDropdown(){
+  const fsel=document.getElementById("filter-group");
+  if(!fsel)return;
+  const cur=fsel.value;
+  fsel.innerHTML=`<option value="all">全部群組</option>`+groups.map(g=>`<option value="${g.id}">${g.name}</option>`).join('');
+  if(cur)fsel.value=cur;
+}
+function onFilterGroupChange(){
+  const val=document.getElementById("filter-group")?.value;
+  if(val&&val!=="all"){
+    currentGroup=groups.find(g=>g.id===val)||null;
+    loadEntries(val);
+  } else {
+    currentGroup=null;
+    loadAllEntries();
+  }
+}
+async function loadAllEntries(){
+  showLoading("載入記錄...");
+  const{data,error}=await sb.from("entries").select("*").order("created_at",{ascending:false});
+  hideLoading();if(error){toast("載入失敗","error");return;}
+  entries=data||[];renderTable();
+}
+function toggleGroupsPanel(){
+  const panel=document.getElementById("groups-panel");
+  const arrow=document.getElementById("groups-panel-arrow");
+  if(!panel)return;
+  const open=panel.style.display==="none";
+  panel.style.display=open?"block":"none";
+  if(arrow)arrow.textContent=open?"▲ 收起":"▼ 展開";
 }
 
 // ENTRIES
@@ -997,7 +1035,10 @@ async function submitEntry(){
   hideLoading();if(error){toast("儲存失敗："+error.message,"error");return;}
   toast(editingId?`記錄已更新`:`已新增至「${targetGroup?.name}」`,"success");
   editingId=null;document.getElementById("form-title").textContent="新增進倉記錄";document.getElementById("submit-btn").textContent="📌 建立記錄";
-  resetForm();await loadEntries(currentGroup.id);
+  resetForm();
+  const fval=document.getElementById("filter-group")?.value;
+  if(fval&&fval!=="all") await loadEntries(fval);
+  else await loadAllEntries();
 }
 async function deleteEntry(id,name){
   if(!can.deleteEntry())return alert("無刪除權限");
@@ -1201,9 +1242,10 @@ function renderTable(){
   const wrap=document.getElementById("table-wrap");
   if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;return;}
   let totalCBM=0,totalNet=0;const showDel=can.deleteEntry();
-  let html=`<table><thead><tr><th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th><th>淨重(kg)</th><th>總CBM</th><th>單價</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  let html=`<table><thead><tr><th>日期時間</th><th>群組</th><th>名稱</th><th>供應商</th><th>件數</th><th>淨重(kg)</th><th>總CBM</th><th>單價</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
   list.forEach(e=>{
     totalCBM+=(e.cbm||0);totalNet+=(e.淨重||0);
+    const grpName=groups.find(g=>g.id===e.group_id)?.name||'—';
     const photos=e.photos||[];
     const photoHtml=photos.length
       ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${photos.map(url=>{
@@ -1213,6 +1255,7 @@ function renderTable(){
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
+      <td><span class="tag tag-blue">${grpName}</span></td>
       <td style="font-weight:600;">${e.名稱||""}</td><td>${e.供應商||"—"}</td>
       <td class="mono">${e.件數||"—"}</td><td class="mono">${e.淨重??""}</td>
       <td class="mono" style="color:var(--accent);">${e.cbm?e.cbm.toFixed(4):"—"}</td>
