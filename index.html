@@ -476,8 +476,8 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <div style="display:flex;gap:8px;align-items:center;">
       <select id="dlv-filter" onchange="renderDelivery()" style="width:130px;">
         <option value="all">全部</option>
-        <option value="pending" selected>待到貨</option>
-        <option value="arrived">已到貨</option>
+        <option value="pending" selected>未回報</option>
+        <option value="arrived">已回報</option>
       </select>
       <button class="btn btn-primary btn-sm" id="btn-add-delivery" onclick="openDeliveryModal()">＋ 建立到貨單</button>
     </div>
@@ -514,6 +514,13 @@ tr:hover td{background:rgba(79,156,249,.04);}
       <div class="form-group full">
         <label>📝 辦公室備註</label>
         <textarea id="dlv-notes" placeholder="給外場人員的說明..." style="min-height:60px;"></textarea>
+      </div>
+      <div class="form-group full">
+        <label>📋 回報狀態</label>
+        <select id="dlv-status">
+          <option value="pending">⏳ 未回報</option>
+          <option value="arrived">✅ 已回報</option>
+        </select>
       </div>
     </div>
     <div class="btn-row">
@@ -1578,8 +1585,8 @@ function renderDeliveryStats(){
   const today=new Date().toISOString().substring(0,10);
   const todayArr=deliveries.filter(d=>d.status==='arrived'&&(d.arrived_at||'').substring(0,10)===today).length;
   document.getElementById('dlv-stats').innerHTML=`
-    <div class="stat-card"><div class="stat-icon si-yellow">⏳</div><div><div class="stat-num mono">${pending}</div><div class="stat-label">待到貨</div></div></div>
-    <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num mono">${arrived}</div><div class="stat-label">已到貨</div></div></div>
+    <div class="stat-card"><div class="stat-icon si-yellow">⏳</div><div><div class="stat-num mono">${pending}</div><div class="stat-label">未回報</div></div></div>
+    <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num mono">${arrived}</div><div class="stat-label">已回報</div></div></div>
     <div class="stat-card"><div class="stat-icon si-cyan">📅</div><div><div class="stat-num mono">${todayArr}</div><div class="stat-label">今日到貨</div></div></div>
     <div class="stat-card"><div class="stat-icon si-blue">📋</div><div><div class="stat-num mono">${total}</div><div class="stat-label">全部單數</div></div></div>`;
 }
@@ -1588,7 +1595,7 @@ function renderDelivery(){
   const filter=document.getElementById('dlv-filter').value;
   const list=filter==='all'?deliveries:deliveries.filter(d=>d.status===filter);
   const wrap=document.getElementById('delivery-table');
-  if(!list.length){wrap.innerHTML=`<div class="no-data">📭 ${filter==='pending'?'目前沒有待到貨記錄':filter==='arrived'?'沒有已到貨記錄':'暫無資料'}</div>`;return;}
+  if(!list.length){wrap.innerHTML=`<div class="no-data">📭 ${filter==='pending'?'目前沒有未回報記錄':filter==='arrived'?'沒有已回報記錄':'暫無資料'}</div>`;return;}
   const canCreate=can.createDelivery();
   wrap.innerHTML=`<table><thead><tr>
     <th>單號</th><th>供應商</th><th>貨物描述</th><th>預計件數</th><th>預計到貨日</th>
@@ -1605,7 +1612,7 @@ function renderDelivery(){
       <td style="font-weight:600;">${d.description||'—'}</td>
       <td class="mono">${d.expected_count||'—'}</td>
       <td class="mono" style="color:${isOverdue?'var(--danger)':'var(--text)'};">${etaStr}${isOverdue?' ⚠️':''}</td>
-      <td><span class="tag ${isPending?'tag-yellow':'tag-green'}">${isPending?'⏳ 待到貨':'✅ 已到貨'}</span></td>
+      <td><span class="tag ${isPending?'tag-yellow':'tag-green'}">${isPending?'⏳ 未回報':'✅ 已回報'}</span></td>
       <td><span class="tag tag-blue">${d.created_by||'—'}</span></td>
       <td class="mono" style="font-size:12px;">${d.arrived_at?(d.arrived_at).substring(0,16):'—'}</td>
       <td class="mono">${d.actual_count!=null?d.actual_count:'—'}</td>
@@ -1633,11 +1640,12 @@ function openDeliveryModal(id=null){
     document.getElementById('dlv-count').value=d.expected_count||'';
     document.getElementById('dlv-desc').value=d.description||'';
     document.getElementById('dlv-notes').value=d.office_notes||'';
+    document.getElementById('dlv-status').value=d.status||'pending';
   }else{
     document.getElementById('dlv-modal-title').textContent='建立預期到貨單';
     ['dlv-code','dlv-supplier','dlv-desc','dlv-notes'].forEach(i=>document.getElementById(i).value='');
     document.getElementById('dlv-count').value='';
-    // auto-generate a suggested code
+    document.getElementById('dlv-status').value='pending';
     const now=new Date();
     const ymd=`${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
     document.getElementById('dlv-code').value=`PO-${ymd}-`;
@@ -1649,6 +1657,7 @@ function closeDeliveryModal(){document.getElementById('delivery-modal').classLis
 async function saveDelivery(){
   const code=document.getElementById('dlv-code').value.trim();
   if(!code)return alert('請輸入單號');
+  const status=document.getElementById('dlv-status').value||'pending';
   const payload={
     code,
     supplier:document.getElementById('dlv-supplier').value.trim()||null,
@@ -1657,10 +1666,13 @@ async function saveDelivery(){
     eta:document.getElementById('dlv-eta').value||null,
     office_notes:document.getElementById('dlv-notes').value.trim()||null,
     created_by:currentUser.name,
+    status,
+    // 如果選已回報，自動填入到貨時間
+    arrived_at: status==='arrived' ? new Date().toISOString() : null,
   };
   showLoading("儲存中...");let error;
   if(editingDeliveryId){({error}=await sb.from('deliveries').update(payload).eq('id',editingDeliveryId));}
-  else{({error}=await sb.from('deliveries').insert({...payload,status:'pending'}));}
+  else{({error}=await sb.from('deliveries').insert(payload));}
   hideLoading();
   if(error){toast("儲存失敗："+error.message,"error");return;}
   toast(editingDeliveryId?"到貨單已更新":"到貨單已建立","success");
