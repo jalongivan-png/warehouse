@@ -283,6 +283,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div class="nav-tabs">
     <button class="nav-tab active" onclick="showPage('dashboard')" data-page="dashboard">📊 <span class="tab-lbl">總覽</span></button>
     <button class="nav-tab" onclick="showPage('inbound')" data-page="inbound">📦 <span class="tab-lbl">進貨登記</span></button>
+    <button class="nav-tab" onclick="showPage('records')" data-page="records">📋 <span class="tab-lbl">進倉記錄</span></button>
     <button class="nav-tab" onclick="showPage('inventory')" data-page="inventory">🗃 <span class="tab-lbl">庫存管理</span></button>
     <button class="nav-tab" onclick="showPage('customers')" data-page="customers">👥 <span class="tab-lbl">客戶管理</span></button>
     <button class="nav-tab" onclick="showPage('reports')" data-page="reports">📈 <span class="tab-lbl">報表統計</span></button>
@@ -390,12 +391,26 @@ tr:hover td{background:rgba(79,156,249,.04);}
     </div>
   </div>
 
-  <!-- 進倉記錄（同頁顯示，依群組篩選） -->
-  <div class="card fade-in" style="margin-top:8px;">
+  <!-- 群組管理（折疊區） -->
+  <div style="margin-top:8px;">
+    <div class="section-title" style="cursor:pointer;" onclick="toggleGroupsPanel()">
+      📁 群組管理 <span id="groups-panel-arrow" style="color:var(--text3);font-size:11px;">▼ 展開</span>
+    </div>
+    <div id="groups-panel" style="display:none;">
+      <div class="groups-row" id="groups-row"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: RECORDS -->
+<div class="page" id="page-records">
+  <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+    <div><h2 style="font-size:18px;font-weight:700;">📋 進倉記錄</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">查看所有進倉記錄，可依群組篩選</p></div>
+  </div>
+  <div class="card">
     <div class="records-topbar">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="card-title" style="margin-bottom:0;"><span class="bar bar-green"></span>進倉記錄</div>
-        <!-- 群組篩選 -->
         <select id="filter-group" onchange="onFilterGroupChange()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:5px 10px;font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;">
           <option value="all">全部群組</option>
         </select>
@@ -407,16 +422,6 @@ tr:hover td{background:rgba(79,156,249,.04);}
       </div>
     </div>
     <div class="table-wrap" id="table-wrap"></div>
-  </div>
-
-  <!-- 群組管理（折疊區） -->
-  <div style="margin-top:8px;">
-    <div class="section-title" style="cursor:pointer;" onclick="toggleGroupsPanel()">
-      📁 群組管理 <span id="groups-panel-arrow" style="color:var(--text3);font-size:11px;">▼ 展開</span>
-    </div>
-    <div id="groups-panel" style="display:none;">
-      <div class="groups-row" id="groups-row"></div>
-    </div>
   </div>
 </div>
 
@@ -801,6 +806,7 @@ function showPage(name){
   if(name==='customers')loadCustomers();
   if(name==='reports')loadReports();
   if(name==='delivery')loadDelivery();
+  if(name==='records'){refreshFilterDropdown();loadAllEntries();}
   if(name==='photolibrary')loadPhotoLibrary();
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
@@ -1039,6 +1045,7 @@ async function submitEntry(){
   const fval=document.getElementById("filter-group")?.value;
   if(fval&&fval!=="all") await loadEntries(fval);
   else await loadAllEntries();
+  refreshFilterDropdown();
 }
 async function deleteEntry(id,name){
   if(!can.deleteEntry())return alert("無刪除權限");
