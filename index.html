@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-<title>倉儲批發管理系統</title>
+<title>倉儲批發系統</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -185,20 +185,24 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .form-group.full{grid-column:1;}
   .stats-row{grid-template-columns:1fr 1fr;}
   .page{padding:10px 8px;}
-  .nav-tabs .nav-tab .tab-lbl{display:none;}
 
-  /* 導覽列縮小 */
-  .nav-tab{padding:10px 10px;}
-  .nav-logo{padding:8px 10px 8px 0;margin-right:6px;}
-  .nav-logo-icon{width:28px;height:28px;font-size:14px;}
+  /* 導覽列：logo + 使用者/登出 在第一行，頁籤獨佔第二行 */
+  #topnav{padding:0 10px;flex-wrap:wrap;}
+  .nav-logo{padding:6px 8px 6px 0;margin-right:6px;border-right:none;}
+  .nav-logo-icon{width:26px;height:26px;font-size:13px;}
   .nav-logo-text h1{font-size:12px;}
   .nav-logo-text p{display:none;}
-  .user-pill{padding:4px 8px 4px 4px;}
-  .up-avatar{width:22px;height:22px;font-size:10px;}
+  .nav-tabs{order:3;width:100%;border-top:1px solid var(--border);overflow-x:auto;gap:0;}
+  .nav-tab{padding:9px 11px;font-size:18px;} /* 只顯示emoji，夠大好點 */
+  .nav-tabs .nav-tab .tab-lbl{display:none;}
+  .nav-right{margin-left:auto;padding:6px 0;gap:6px;}
+  .user-pill{padding:3px 8px 3px 4px;}
+  .up-avatar{width:20px;height:20px;font-size:10px;}
   .up-name{font-size:11px;}
+  .role-badge{font-size:10px;padding:2px 6px;}
   .logout-btn{padding:4px 8px;font-size:11px;}
 
-  /* 表單輸入框縮小 */
+  /* 表單 */
   input[type=text],input[type=number],input[type=datetime-local],input[type=date],select,textarea{
     padding:8px 10px;font-size:14px;
   }
@@ -208,7 +212,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .card{padding:14px 12px;margin-bottom:12px;}
   .card-title{font-size:12px;margin-bottom:12px;}
 
-  /* 材積表格手機版 */
+  /* 材積表格 */
   .dim-table{font-size:12px;}
   .dim-table th{padding:5px 3px;font-size:10px;}
   .dim-table td{padding:3px 2px;}
@@ -226,31 +230,26 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .stat-num{font-size:20px;}
   .stat-label{font-size:11px;}
 
-  /* 照片庫選取區手機版 */
-  #fl-grid{grid-template-columns:repeat(auto-fill,minmax(70px,1fr));max-height:200px;}
-
-  /* 進貨表單照片區 */
+  /* 照片庫選取：格子放大好點選 */
+  #fl-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));max-height:280px;}
   .photo-thumbs .thumb-wrap{width:56px;height:56px;}
 
-  /* 群組chip */
+  /* 群組 */
   .group-chip{padding:5px 10px;font-size:12px;}
   .btn-new-group{padding:5px 10px;font-size:12px;}
 
-  /* table 手機字體 */
+  /* 表格 */
   table{font-size:12px;}
   th{padding:7px 8px;}
   td{padding:6px 8px;}
-
-  /* records topbar */
   .records-topbar{flex-direction:column;align-items:flex-start;}
   .search-input{width:100%;}
 }
 
-/* 超小螢幕 */
 @media(max-width:380px){
   .stats-row{grid-template-columns:1fr;}
   input[type=text],input[type=number],input[type=datetime-local],input[type=date],select,textarea{
-    font-size:16px; /* 防止 iOS 自動放大 */
+    font-size:16px;
   }
 }
 </style>
@@ -264,7 +263,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div class="login-box">
     <div class="login-logo">
       <div class="login-logo-icon">🏭</div>
-      <div><h1>倉儲批發管理系統</h1><p>WAREHOUSE · POS · MANAGEMENT</p></div>
+      <div><h1>倉儲批發系統</h1><p>WAREHOUSE · POS · MANAGEMENT</p></div>
     </div>
     <div class="lf"><label>帳號</label><input type="text" id="login-username" placeholder="請輸入帳號名稱" onkeydown="if(event.key==='Enter')document.getElementById('login-pw').focus()"></div>
     <div class="lf"><label>密碼</label><input type="password" id="login-pw" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()"></div>
