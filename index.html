@@ -1593,23 +1593,48 @@ async function plHandleUpload(e) {
   const txt = document.getElementById('pl-progress-text');
   const pct = document.getElementById('pl-progress-pct');
   prog.style.display = 'block';
-  let done = 0;
+  let done = 0, failed = 0;
   for (const file of files) {
-    txt.textContent = `上傳中：${file.name}`;
+    txt.textContent = `上傳中 (${done+1}/${files.length})：${file.name}`;
     const rand = Math.random().toString(36).slice(2, 8);
-    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const path = `${PL_FOLDER}/${Date.now()}-${rand}-${safeName}`;
-    const { error } = await sb.storage.from(PL_BUCKET).upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type });
-    if (error) { toast('上傳失敗：' + error.message, 'error'); }
-    done++;
-    const p = Math.round(done / files.length * 100);
+    // 手機拍照檔名常為中文或特殊字元，強制換成安全檔名
+    const ext = (file.type === 'image/png') ? 'png' : 'jpg';
+    const safeName = `photo-${Date.now()}-${rand}.${ext}`;
+    const path = `${PL_FOLDER}/${safeName}`;
+    try {
+      const { error } = await sb.storage.from(PL_BUCKET).upload(path, file, {
+        cacheControl: '3600',
+        upsert: true,          // 改為 true，避免重名衝突報錯
+        contentType: file.type || 'image/jpeg',
+      });
+      if (error) {
+        failed++;
+        // 顯示詳細錯誤原因，幫助排查
+        const reason = error.message || JSON.stringify(error);
+        toast(`❌ 上傳失敗：${reason}`, 'error');
+        txt.textContent = `❌ 失敗：${reason}`;
+        console.error('Upload error:', error);
+      } else {
+        done++;
+      }
+    } catch(err) {
+      failed++;
+      toast(`❌ 例外錯誤：${err.message}`, 'error');
+      console.error('Upload exception:', err);
+    }
+    const p = Math.round((done + failed) / files.length * 100);
     bar.style.width = p + '%';
     pct.textContent = p + '%';
   }
-  txt.textContent = `✅ 上傳完成 ${done} 張`;
-  setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 2000);
-  toast(`已上傳 ${done} 張照片`, 'success');
-  await loadPhotoLibrary();
+  if (failed === 0) {
+    txt.textContent = `✅ 上傳完成 ${done} 張`;
+    toast(`✅ 已上傳 ${done} 張照片`, 'success');
+  } else {
+    txt.textContent = `⚠️ 成功 ${done} 張，失敗 ${failed} 張`;
+    toast(`⚠️ 成功 ${done} 張，失敗 ${failed} 張`, 'error');
+  }
+  setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0%'; }, 3000);
+  if (done > 0) await loadPhotoLibrary();
 }
 
 async function plDeletePhoto(name) {
