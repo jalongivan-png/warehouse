@@ -1404,41 +1404,42 @@ function renderTable(){
   html+=`</tbody></table>`;
   wrap.innerHTML=html;
 }
-async function exportExcel(){
+function exportExcel(){
   if(!can.exportExcel())return alert("無匯出權限");
-  // 收集所有要匯出的資料
-  const exportData = entries;
-  if(!exportData.length){toast("無資料可匯出","error");return;}
-
-  // 先測試 CORS
-  const testPhotos = exportData.find(e=>e.photos&&e.photos.length>0)?.photos?.[0];
-  let canEmbedImages = false;
-  if(testPhotos){
-    try{
-      const res = await fetch(testPhotos);
-      if(res.ok) canEmbedImages = true;
-    }catch(e){ canEmbedImages = false; }
-  }
-
-  showLoading(canEmbedImages ? "匯出中，正在下載圖片..." : "匯出中...");
+  if(!entries.length){toast("無資料可匯出","error");return;}
+  showLoading("匯出中...");
 
   const wb = XLSX.utils.book_new();
   const wsData = [];
 
   // 標題列
-  wsData.push(['日期時間','群組','名稱','供應商','件數','總重(kg)','板重(kg)','淨重(kg)','長(cm)','寬(cm)','高(cm)','總CBM','單價','操作員','備註','圖片數量','圖片網址']);
+  wsData.push(['日期時間','類型','群組','名稱','供應商','件數','總重(kg)','板重(kg)','淨重(kg)','長(cm)','寬(cm)','高(cm)','總CBM','單價','操作員','備註','圖片數量','圖片1','圖片2','圖片3']);
 
-  for(const e of exportData){
+  for(const e of entries){
     const grpName = groups.find(g=>g.id===e.group_id)?.name||'';
     const dim = (e.dims&&e.dims.length>0)?e.dims[0]:{};
     const photos = e.photos||[];
     wsData.push([
-      e.日期時間||'', grpName, e.名稱||'', e.供應商||'',
-      e.件數||'', e.總重||'', e.板重||'', e.淨重||'',
-      dim.len||'', dim.wid||'', dim.hei||'',
-      e.cbm||'', e.單價||'', e.operator||'', e.備註||'',
+      e.日期時間||'',
+      e.cargo_type||'普',
+      grpName,
+      e.名稱||'',
+      e.供應商||'',
+      e.件數||'',
+      e.總重||'',
+      e.板重||'',
+      e.淨重||'',
+      dim.len||'',
+      dim.wid||'',
+      dim.hei||'',
+      e.cbm||'',
+      e.單價||'',
+      e.operator||'',
+      e.備註||'',
       photos.length,
-      photos.join('\n')
+      photos[0]||'',
+      photos[1]||'',
+      photos[2]||'',
     ]);
   }
 
@@ -1446,43 +1447,31 @@ async function exportExcel(){
 
   // 設定欄寬
   ws['!cols'] = [
-    {wch:16},{wch:10},{wch:14},{wch:12},{wch:6},
-    {wch:8},{wch:8},{wch:8},{wch:7},{wch:7},{wch:7},
-    {wch:10},{wch:8},{wch:10},{wch:20},{wch:8},{wch:60}
+    {wch:16},{wch:5},{wch:10},{wch:14},{wch:12},
+    {wch:6},{wch:8},{wch:8},{wch:8},{wch:7},{wch:7},{wch:7},
+    {wch:10},{wch:8},{wch:10},{wch:20},{wch:6},
+    {wch:50},{wch:50},{wch:50}
   ];
 
-  // 如果 CORS 可用，嵌入圖片到獨立的圖片工作表
-  if(canEmbedImages){
-    const imgSheetData = [['日期時間','名稱','圖片編號','圖片(base64)']];
-    for(const e of exportData){
-      const photos = e.photos||[];
-      for(let i=0;i<photos.length;i++){
-        try{
-          const res = await fetch(photos[i]);
-          const blob = await res.blob();
-          const b64 = await new Promise(resolve=>{
-            const reader = new FileReader();
-            reader.onload = ()=>resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-          imgSheetData.push([e.日期時間||'', e.名稱||'', `第${i+1}張`, b64]);
-        }catch(err){
-          imgSheetData.push([e.日期時間||'', e.名稱||'', `第${i+1}張`, photos[i]]);
-        }
+  // 將圖片網址設為超連結，點擊可直接開啟
+  const linkStyle = {font:{color:{rgb:'0563C1'},underline:true}};
+  for(let r=1;r<wsData.length;r++){
+    [17,18,19].forEach((col,ci)=>{
+      const url = (entries[r-1]?.photos||[])[ci];
+      if(!url) return;
+      const cellRef = XLSX.utils.encode_cell({r, c:col});
+      if(ws[cellRef]){
+        ws[cellRef].l = {Target: url, Tooltip: '點擊開啟圖片'};
+        ws[cellRef].s = linkStyle;
       }
-    }
-    const wsImg = XLSX.utils.aoa_to_sheet(imgSheetData);
-    wsImg['!cols']=[{wch:16},{wch:14},{wch:8},{wch:80}];
-    XLSX.utils.book_append_sheet(wb, wsImg, '圖片');
-    toast('✅ 圖片已嵌入獨立工作表','success');
-  } else {
-    toast('⚠️ 圖片以網址方式匯出（CORS 未開放）','info');
+    });
   }
 
   XLSX.utils.book_append_sheet(wb, ws, '進倉記錄');
   const buf = XLSX.write(wb,{bookType:"xlsx",type:"array"});
   saveAs(new Blob([buf],{type:"application/octet-stream"}),`進貨記錄_${new Date().toISOString().substring(0,10)}.xlsx`);
   hideLoading();
+  toast('✅ 匯出完成','success');
 }
 
 // MOVE ENTRY
