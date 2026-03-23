@@ -67,6 +67,7 @@ body::before{content:'';position:fixed;inset:0;
 .role-admin{background:rgba(239,68,68,.15);color:var(--danger);border:1px solid rgba(239,68,68,.3);}
 .role-supervisor{background:rgba(245,158,11,.15);color:var(--warning);border:1px solid rgba(245,158,11,.3);}
 .role-user{background:rgba(79,156,249,.15);color:var(--accent);border:1px solid rgba(79,156,249,.3);}
+.role-guest{background:rgba(90,95,122,.2);color:var(--text3);border:1px solid rgba(90,95,122,.4);}
 .logout-btn{background:transparent;border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:5px 12px;cursor:pointer;font-size:12px;font-family:'Noto Sans TC',sans-serif;transition:all .2s;}
 .logout-btn:hover{border-color:var(--danger);color:var(--danger);}
 /* PAGES */
@@ -817,7 +818,7 @@ function toast(msg,type="info"){
   document.getElementById("toast").appendChild(el);setTimeout(()=>el.remove(),3000);
 }
 function roleBadgeHTML(role){
-  const m={admin:["管理員","role-admin","🔑"],supervisor:["主管","role-supervisor","📋"],user:["一般","role-user","👤"]};
+  const m={admin:["管理員","role-admin","🔑"],supervisor:["主管","role-supervisor","📋"],user:["一般","role-user","👤"],guest:["訪客","role-guest","👁"]};
   const[label,cls,icon]=m[role]||["未知","role-user","👤"];
   return `<span class="role-badge ${cls}">${icon} ${label}</span>`;
 }
@@ -852,9 +853,10 @@ const can={
   manageUsers:()=>currentUser&&currentUser.role==="admin",
   editInventory:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   editCustomers:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
-  createDelivery:()=>currentUser&&["admin","supervisor","user"].includes(currentUser.role),
+  createDelivery:()=>currentUser&&["admin","supervisor","user","guest"].includes(currentUser.role),
   deleteDelivery:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
   deleteSupplier:()=>currentUser&&["admin","supervisor"].includes(currentUser.role),
+  isGuest:()=>currentUser&&currentUser.role==="guest",
 };
 
 // LOGIN
@@ -903,10 +905,21 @@ async function onAfterLogin(){
   document.getElementById("admin-panel-inbound").style.display=can.manageUsers()?"":"none";
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
   document.getElementById("btn-add-delivery").style.display="";
+  // 訪客：只顯示到貨回報頁籤
+  const guestOnly=['dashboard','inbound','records','inventory','customers','reports','photolibrary'];
+  guestOnly.forEach(p=>{
+    const tab=document.querySelector(`[data-page="${p}"]`);
+    if(tab) tab.style.display=can.isGuest()?'none':'';
+  });
   if(can.manageUsers())renderUsersTable();
-  await loadGroups();   // 先等群組載入完
-  resetForm();          // 再填表單（此時 groups 已有資料）
-  refreshFilterDropdown(); // 同步更新篩選下拉
+  if(can.isGuest()){
+    // 訪客直接進到貨回報
+    showPage('delivery');
+    return;
+  }
+  await loadGroups();
+  resetForm();
+  refreshFilterDropdown();
   loadFormLibrary();
   loadDashboard();
 }
@@ -928,8 +941,8 @@ async function renderAdminUsers(){
 }
 async function addUserPrompt(){
   const name=prompt("新帳號名稱：");if(!name?.trim())return;
-  const role=prompt("角色（admin/supervisor/user）：","user");
-  if(!["admin","supervisor","user"].includes(role))return alert("角色無效");
+  const role=prompt("角色（admin/supervisor/user/guest）：\n• admin = 管理員\n• supervisor = 主管\n• user = 一般\n• guest = 訪客（只能建立到貨單）","user");
+  if(!["admin","supervisor","user","guest"].includes(role))return alert("角色無效，請輸入 admin / supervisor / user / guest");
   const pw=prompt("設定密碼：");if(!pw)return;
   const users=await loadUsers();
   if(users.find(u=>u.name===name.trim()))return alert("帳號已存在");
