@@ -1363,6 +1363,31 @@ function renderThumbs(){
 function openLightbox(src){document.getElementById("lightbox-img").src=src;document.getElementById("lightbox").classList.add("show");}
 function closeLightbox(){document.getElementById("lightbox").classList.remove("show");}
 
+// 顯示全部照片（點 +N 時）
+let _allPhotos=[];let _allPhotoIdx=0;
+function openPhotoAll(photos){
+  _allPhotos=photos;_allPhotoIdx=0;
+  openLightbox(photos[0]);
+  // 替換 lightbox 為可翻頁模式
+  const lb=document.getElementById('lightbox');
+  lb.onclick=null;
+  lb.innerHTML=`
+    <button onclick="closeLightbox()" style="position:absolute;top:16px;right:20px;color:white;font-size:26px;cursor:pointer;background:none;border:none;">✕</button>
+    <button onclick="_allPhotoIdx=Math.max(0,_allPhotoIdx-1);document.getElementById('lb-img').src=_allPhotos[_allPhotoIdx];document.getElementById('lb-counter').textContent=(_allPhotoIdx+1)+'/'+_allPhotos.length;"
+      style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:white;font-size:32px;cursor:pointer;background:rgba(0,0,0,.4);border:none;border-radius:50%;width:44px;height:44px;">‹</button>
+    <img id="lb-img" src="${photos[0]}" style="max-width:88vw;max-height:80vh;border-radius:8px;">
+    <div id="lb-counter" style="position:absolute;bottom:16px;color:rgba(255,255,255,.8);font-size:14px;">1/${photos.length}</div>
+    <button onclick="_allPhotoIdx=Math.min(_allPhotos.length-1,_allPhotoIdx+1);document.getElementById('lb-img').src=_allPhotos[_allPhotoIdx];document.getElementById('lb-counter').textContent=(_allPhotoIdx+1)+'/'+_allPhotos.length;"
+      style="position:absolute;right:12px;top:50%;transform:translateY(-50%);color:white;font-size:32px;cursor:pointer;background:rgba(0,0,0,.4);border:none;border-radius:50%;width:44px;height:44px;">›</button>`;
+}
+function closeLightbox(){
+  const lb=document.getElementById('lightbox');
+  lb.classList.remove('show');
+  lb.onclick=closeLightbox;
+  lb.innerHTML=`<button class="lightbox-close">✕</button><img id="lightbox-img" src="" alt="">`;
+  document.getElementById('lightbox-img'); // reset
+}
+
 // TABLE
 function renderTable(){
   const q=(document.getElementById("search-input").value||"").toLowerCase();
@@ -1376,10 +1401,13 @@ function renderTable(){
     const dim=(e.dims&&e.dims.length>0)?e.dims[0]:{};
     const photos=e.photos||[];
     const photoHtml=photos.length
-      ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${photos.map(url=>{
-          const safe=String(url).replace(/'/g,"&#39;");
-          return `<img src="${url}" onclick="openLightbox('${safe}')" style="width:40px;height:40px;object-fit:cover;border-radius:5px;border:1px solid var(--border);cursor:pointer;">`;
-        }).join('')}</div>`
+      ? `<div style="display:grid;grid-template-columns:repeat(3,36px);gap:3px;">
+          ${photos.slice(0,3).map((url,i)=>{
+            const safe=String(url).replace(/'/g,"&#39;");
+            return `<img src="${url}" onclick="openLightbox('${safe}')" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer;">`;
+          }).join('')}
+          ${photos.length>3?`<div onclick="openPhotoAll(${JSON.stringify(photos).replace(/"/g,'&quot;')})" style="width:36px;height:36px;background:var(--surface2);border:1px solid var(--border);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--accent);cursor:pointer;font-weight:700;">+${photos.length-3}</div>`:''}
+        </div>`
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
