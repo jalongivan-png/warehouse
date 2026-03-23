@@ -346,6 +346,13 @@ tr:hover td{background:rgba(79,156,249,.04);}
         <div class="form-group"><label>🪵 板重 (kg)</label><input type="number" id="f-tare" placeholder="0.000" step="0.001" oninput="calcNet()"></div>
         <div class="form-group"><label>📊 淨重（自動）</label><div class="cbm-display" id="net-display">—</div></div>
         <div class="form-group"><label>💰 單價 (元)</label><input type="number" id="f-price" placeholder="0" step="0.01" min="0"></div>
+        <div class="form-group">
+          <label>📦 貨物類型</label>
+          <select id="f-cargo-type">
+            <option value="普">普貨</option>
+            <option value="特">特貨</option>
+          </select>
+        </div>
         <div class="form-group full">
           <label>📁 儲存到群組</label>
           <select id="f-target-group"></select>
@@ -1055,6 +1062,7 @@ function showSaveSummary(d, groupName, isEdit){
   const rows = [
     ['📅 日期時間', d.日期時間 || timeStr],
     ['🏷 貨物名稱', d.名稱 || '—'],
+    ['📦 貨物類型', d.cargo_type==='特' ? '🔴 特貨' : '🔵 普貨'],
     ['🏭 供應商', d.供應商 || '—'],
     ['📁 群組', groupName || '—'],
     ['🔢 件數', d.件數 || '—'],
@@ -1153,6 +1161,7 @@ function editEntry(id){
   document.getElementById("f-tare").value=e.板重||"";
   document.getElementById("f-notes").value=e.備註||"";
   document.getElementById("f-price").value=e.單價||"";
+  document.getElementById("f-cargo-type").value=e.cargo_type||"普";
   dimRows=(e.dims?.length>0)?e.dims.map(d=>({len:d.len||"",wid:d.wid||"",hei:d.hei||"",qty:d.qty||1,bulk:!!d.bulk})):[{len:"",wid:"",hei:"",qty:1,bulk:false}];
   renderDimTable();pendingPhotos=[...(e.photos||[])];renderThumbs();calcNet();
   document.getElementById("form-title").textContent=`編輯：${e.名稱}`;
@@ -1166,6 +1175,7 @@ function resetForm(){
   document.getElementById("f-datetime").value=nowStr();
   ["f-name","f-supplier","f-count","f-gross","f-tare","f-notes","f-price"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
   document.getElementById("f-name").value=lastName;document.getElementById("net-display").textContent="—";
+  const ct=document.getElementById("f-cargo-type");if(ct)ct.value="普";
   dimRows=[];addDimRow();pendingPhotos=[];renderThumbs();
   refreshFilterDropdown();
 }
@@ -1185,6 +1195,7 @@ function getFormData(){
     件數:document.getElementById("f-count").value,
     總重,板重,淨重:+(總重-板重).toFixed(4),
     單價:parseFloat(document.getElementById("f-price").value)||0,
+    cargo_type:document.getElementById("f-cargo-type").value||"普",
     dims:dimRows.map(r=>({len:parseFloat(r.len)||0,wid:parseFloat(r.wid)||0,hei:parseFloat(r.hei)||0,qty:parseInt(r.qty)||0,bulk:!!r.bulk})),
     cbm:+getTotalCBM().toFixed(6),
     備註:document.getElementById("f-notes").value.trim(),
@@ -1359,7 +1370,7 @@ function renderTable(){
   const wrap=document.getElementById("table-wrap");
   if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;return;}
   const showDel=can.deleteEntry();
-  let html=`<table><thead><tr><th>日期時間</th><th>名稱</th><th>供應商</th><th>件數</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  let html=`<table><thead><tr><th>日期時間</th><th>類型</th><th>名稱</th><th>供應商</th><th>件數</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
   list.forEach(e=>{
     // 取第一筆材積資料顯示
     const dim=(e.dims&&e.dims.length>0)?e.dims[0]:{};
@@ -1372,6 +1383,7 @@ function renderTable(){
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
+      <td><span class="tag ${e.cargo_type==='特'?'tag-red':'tag-blue'}" style="font-weight:700;">${e.cargo_type||'普'}</span></td>
       <td style="font-weight:600;">${e.名稱||"—"}</td>
       <td>${e.供應商||"—"}</td>
       <td class="mono">${e.件數||"—"}</td>
