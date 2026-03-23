@@ -231,7 +231,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .stat-label{font-size:11px;}
 
   /* 照片庫選取：格子放大好點選 */
-  #fl-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr));max-height:280px;}
+  #fl-grid{grid-template-columns:repeat(3,1fr);max-height:280px;}
   .photo-thumbs .thumb-wrap{width:56px;height:56px;}
 
   /* 群組 */
@@ -382,7 +382,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
                 <button class="btn btn-ghost btn-sm" onclick="loadFormLibrary()">🔄</button>
               </div>
             </div>
-            <div id="fl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;max-height:260px;overflow-y:auto;">
+            <div id="fl-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:260px;overflow-y:auto;">
               <div style="grid-column:1/-1;text-align:center;color:var(--text3);padding:20px;font-size:13px;">⏳ 載入中...</div>
             </div>
             <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -603,7 +603,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
       <div class="card-title" style="margin-bottom:0;"><span class="bar bar-blue"></span>已上傳照片 <span id="pl-count" style="color:var(--text3);font-size:12px;font-weight:400;margin-left:6px;"></span></div>
       <button class="btn btn-ghost btn-sm" onclick="loadPhotoLibrary()">🔄 重新整理</button>
     </div>
-    <div id="pl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;">
+    <div id="pl-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
       <div class="no-data" style="grid-column:1/-1;">⏳ 載入中...</div>
     </div>
   </div>
