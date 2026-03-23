@@ -1835,8 +1835,8 @@ function renderDelivery(){
       <td><span class="tag tag-green">${d.reporter||'—'}</span></td>
       <td style="font-size:12px;color:var(--text2);">${isPending?(d.office_notes||''):(d.field_notes||d.office_notes||'')}</td>
       <td style="white-space:nowrap;">
-        ${isPending && (!can.isGuest() || d.created_by===currentUser?.name) ? `<button class="btn btn-success btn-sm" onclick="openArrivalModal('${d.id}')">✅ 到貨</button>` : ''}
-        ${isPending && !can.isGuest() ? `<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>` : ''}
+        ${isPending && !can.isGuest() ? `<button class="btn btn-success btn-sm" onclick="openArrivalModal('${d.id}')">✅ 到貨</button>` : ''}
+        ${isPending && (!can.isGuest() || d.created_by===currentUser?.name) ? `<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>` : ''}
         ${canCreate && !can.isGuest() ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteDelivery('${d.id}','${(d.code||'').replace(/'/g,"\\'")}')">刪除</button>` : ''}
       </td>
     </tr>`;
