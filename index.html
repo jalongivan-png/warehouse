@@ -1791,11 +1791,13 @@ async function loadDelivery(){
 }
 
 function renderDeliveryStats(){
-  const total=deliveries.length;
-  const pending=deliveries.filter(d=>d.status==='pending').length;
-  const arrived=deliveries.filter(d=>d.status==='arrived').length;
+  let data=deliveries;
+  if(can.isGuest()) data=data.filter(d=>d.created_by===currentUser.name);
+  const total=data.length;
+  const pending=data.filter(d=>d.status==='pending').length;
+  const arrived=data.filter(d=>d.status==='arrived').length;
   const today=new Date().toISOString().substring(0,10);
-  const todayArr=deliveries.filter(d=>d.status==='arrived'&&(d.arrived_at||'').substring(0,10)===today).length;
+  const todayArr=data.filter(d=>d.status==='arrived'&&(d.arrived_at||'').substring(0,10)===today).length;
   document.getElementById('dlv-stats').innerHTML=`
     <div class="stat-card"><div class="stat-icon si-yellow">⏳</div><div><div class="stat-num mono">${pending}</div><div class="stat-label">未回報</div></div></div>
     <div class="stat-card"><div class="stat-icon si-green">✅</div><div><div class="stat-num mono">${arrived}</div><div class="stat-label">已回報</div></div></div>
@@ -1805,7 +1807,9 @@ function renderDeliveryStats(){
 
 function renderDelivery(){
   const filter=document.getElementById('dlv-filter').value;
-  const list=filter==='all'?deliveries:deliveries.filter(d=>d.status===filter);
+  let list=filter==='all'?deliveries:deliveries.filter(d=>d.status===filter);
+  // 訪客只能看自己建立的
+  if(can.isGuest()) list=list.filter(d=>d.created_by===currentUser.name);
   const wrap=document.getElementById('delivery-table');
   if(!list.length){wrap.innerHTML=`<div class="no-data">📭 ${filter==='pending'?'目前沒有未回報記錄':filter==='arrived'?'沒有已回報記錄':'暫無資料'}</div>`;return;}
   const canCreate=can.createDelivery();
