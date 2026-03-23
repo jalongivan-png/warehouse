@@ -382,7 +382,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
                 <button class="btn btn-ghost btn-sm" onclick="loadFormLibrary()">🔄</button>
               </div>
             </div>
-            <div id="fl-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-height:260px;overflow-y:auto;">
+            <div id="fl-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;max-height:300px;overflow-y:auto;">
               <div style="grid-column:1/-1;text-align:center;color:var(--text3);padding:20px;font-size:13px;">⏳ 載入中...</div>
             </div>
             <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -2054,11 +2054,10 @@ function renderPlGrid() {
   const grid = document.getElementById('pl-grid');
   if (!plAllPhotos.length) { grid.innerHTML = '<div class="no-data" style="grid-column:1/-1;">尚無照片，請上傳</div>'; return; }
   grid.innerHTML = plAllPhotos.map(p => `
-    <div style="position:relative;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);aspect-ratio:1;cursor:pointer;" onclick="openLightbox('${p.url.replace(/'/g,"&#39;")}')">
-      <img src="${p.url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
+    <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);aspect-ratio:1;cursor:pointer;" onclick="openLightbox('${p.url.replace(/'/g,"&#39;")}')">
+      <img src="${p.url}" style="width:100%;height:100%;object-fit:contain;padding:2px;" loading="lazy">
       <button onclick="event.stopPropagation();plDeletePhoto('${p.name.replace(/'/g,"&#39;")}')"
-        style="position:absolute;top:4px;right:4px;background:rgba(239,68,68,.85);border:none;color:white;width:22px;height:22px;border-radius:50%;cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:center;">✕</button>
-      <div style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.5);font-size:10px;color:#ccc;padding:3px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.name}</div>
+        style="position:absolute;top:4px;right:4px;background:rgba(239,68,68,.85);border:none;color:white;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;">✕</button>
     </div>`).join('');
 }
 
@@ -2145,9 +2144,9 @@ function renderFormLibrary() {
   grid.innerHTML = list.map(p => {
     const isSelected = pendingPhotos.includes(p.url);
     return `<div onclick="flTogglePhoto('${p.url.replace(/'/g,"&#39;")}')"
-      style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isSelected ? 'var(--success)' : 'var(--border)'};background:var(--surface);aspect-ratio:1;cursor:pointer;transition:border-color .2s;">
-      <img src="${p.url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
-      ${isSelected ? '<div style="position:absolute;top:4px;right:4px;background:var(--success);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:12px;">✓</div>' : ''}
+      style="position:relative;border-radius:6px;overflow:hidden;border:2px solid ${isSelected ? 'var(--success)' : 'var(--border)'};background:var(--surface2);aspect-ratio:1;cursor:pointer;transition:border-color .2s;">
+      <img src="${p.url}" style="width:100%;height:100%;object-fit:contain;padding:2px;" loading="lazy">
+      ${isSelected ? '<div style="position:absolute;top:3px;right:3px;background:var(--success);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:11px;color:white;">✓</div>' : ''}
     </div>`;
   }).join('');
 }
