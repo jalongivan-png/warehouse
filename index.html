@@ -2193,6 +2193,7 @@ async function plDownloadSelected(){
   hideLoading();
   toast(`✅ 已下載 ${done} 張照片`,'success');
 }
+async function plDeleteSelected(){
   if(!plSelectedNames.size)return toast('請先選取照片','error');
   if(!confirm(`確定刪除選取的 ${plSelectedNames.size} 張照片？`))return;
   showLoading(`刪除中... 0/${plSelectedNames.size}`);
