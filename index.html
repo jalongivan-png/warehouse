@@ -285,6 +285,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <button class="nav-tab active" onclick="showPage('dashboard')" data-page="dashboard">📊 <span class="tab-lbl">總覽</span></button>
     <button class="nav-tab" onclick="showPage('inbound')" data-page="inbound">📦 <span class="tab-lbl">進貨登記</span></button>
     <button class="nav-tab" onclick="showPage('records')" data-page="records">📋 <span class="tab-lbl">進倉記錄</span></button>
+    <button class="nav-tab" onclick="showPage('batches')" data-page="batches">🗂 <span class="tab-lbl">批次管理</span></button>
     <button class="nav-tab" onclick="showPage('inventory')" data-page="inventory">🗃 <span class="tab-lbl">庫存管理</span></button>
     <button class="nav-tab" onclick="showPage('customers')" data-page="customers">👥 <span class="tab-lbl">客戶管理</span></button>
     <button class="nav-tab" onclick="showPage('reports')" data-page="reports">📈 <span class="tab-lbl">報表統計</span></button>
@@ -416,7 +417,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
 <!-- PAGE: RECORDS -->
 <div class="page" id="page-records">
   <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
-    <div><h2 style="font-size:18px;font-weight:700;">📋 進倉記錄</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">查看所有進倉記錄，可依群組篩選</p></div>
+    <div><h2 style="font-size:18px;font-weight:700;">📋 進倉記錄</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">未歸批的進倉記錄</p></div>
   </div>
   <div class="card">
     <div class="records-topbar">
@@ -432,7 +433,58 @@ tr:hover td{background:rgba(79,156,249,.04);}
         <button class="btn btn-success btn-sm" id="btn-export" onclick="exportExcel()" style="display:none;">⬇ 匯出</button>
       </div>
     </div>
+    <!-- 勾選後的操作列 -->
+    <div id="batch-action-bar" style="display:none;background:rgba(79,156,249,.08);border:1px solid rgba(79,156,249,.2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="batch-selected-count" style="font-size:13px;color:var(--accent);font-weight:600;">已選 0 筆</span>
+      <select id="batch-select" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:6px 10px;font-size:13px;font-family:'Noto Sans TC',sans-serif;outline:none;flex:1;min-width:160px;">
+        <option value="">— 選擇批次 —</option>
+      </select>
+      <button class="btn btn-primary btn-sm" onclick="assignToBatch()">📦 歸入批次</button>
+      <button class="btn btn-ghost btn-sm" onclick="clearSelection()">取消勾選</button>
+    </div>
     <div class="table-wrap" id="table-wrap"></div>
+  </div>
+</div>
+
+<!-- PAGE: BATCHES -->
+<div class="page" id="page-batches">
+  <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;">
+    <div><h2 style="font-size:18px;font-weight:700;">🗂 批次管理</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">建立批次編碼，點選批次查看歸入的進倉記錄</p></div>
+    <button class="btn btn-primary btn-sm" onclick="openBatchModal()">＋ 新增批次</button>
+  </div>
+  <!-- 批次列表 -->
+  <div id="batch-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-bottom:20px;"></div>
+  <!-- 選中批次的記錄 -->
+  <div id="batch-records-area" style="display:none;">
+    <div class="card fade-in">
+      <div class="records-topbar">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="card-title" style="margin-bottom:0;"><span class="bar bar-yellow"></span><span id="batch-records-title">批次記錄</span></div>
+          <button class="btn btn-ghost btn-sm" onclick="closeBatchRecords()">✕ 關閉</button>
+        </div>
+        <button class="btn btn-success btn-sm" id="btn-export-batch" onclick="exportBatchExcel()">⬇ 匯出此批次</button>
+      </div>
+      <div class="table-wrap" id="batch-table-wrap"></div>
+    </div>
+  </div>
+</div>
+
+<!-- BATCH MODAL -->
+<div class="modal-overlay" id="batch-modal">
+  <div class="modal-box" style="width:420px;">
+    <div class="modal-title">🗂 新增批次<button class="modal-close" onclick="closeBatchModal()">✕</button></div>
+    <div class="form-group" style="margin-bottom:14px;">
+      <label>批次編碼 <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="bm-code" placeholder="例：W2026-03-24、船期001">
+    </div>
+    <div class="form-group">
+      <label>備註</label>
+      <textarea id="bm-notes" placeholder="批次說明..." style="min-height:60px;"></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeBatchModal()">取消</button>
+      <button class="btn btn-primary" onclick="saveBatch()">📌 建立批次</button>
+    </div>
   </div>
 </div>
 
@@ -835,6 +887,7 @@ function showPage(name){
   if(name==='reports')loadReports();
   if(name==='delivery')loadDelivery();
   if(name==='records'){refreshFilterDropdown();loadAllEntries();}
+  if(name==='batches')loadBatches();
   if(name==='photolibrary')loadPhotoLibrary();
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
@@ -906,7 +959,7 @@ async function onAfterLogin(){
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
   document.getElementById("btn-add-delivery").style.display="";
   // 訪客：只顯示到貨回報頁籤
-  const guestOnly=['dashboard','inbound','records','inventory','customers','reports','photolibrary'];
+  const guestOnly=['dashboard','inbound','records','batches','inventory','customers','reports','photolibrary'];
   guestOnly.forEach(p=>{
     const tab=document.querySelector(`[data-page="${p}"]`);
     if(tab) tab.style.display=can.isGuest()?'none':'';
@@ -1051,7 +1104,7 @@ function onFilterGroupChange(){
 }
 async function loadAllEntries(){
   showLoading("載入記錄...");
-  const{data,error}=await sb.from("entries").select("*").order("created_at",{ascending:false});
+  const{data,error}=await sb.from("entries").select("*").is("batch_id",null).order("created_at",{ascending:false});
   hideLoading();if(error){toast("載入失敗","error");return;}
   entries=data||[];renderTable();
 }
@@ -1166,6 +1219,8 @@ function editEntry(id){
   if(!can.editEntry())return alert("無修改權限");
   const e=entries.find(x=>x.id===id);if(!e)return;
   editingId=id;
+  // 先切換到進貨登記頁面
+  showPage('inbound');
   document.getElementById("f-datetime").value=(e.日期時間||"").replace(" ","T");
   document.getElementById("f-name").value=e.名稱||"";
   document.getElementById("f-supplier").value=e.供應商||"";
@@ -1175,10 +1230,16 @@ function editEntry(id){
   document.getElementById("f-notes").value=e.備註||"";
   document.getElementById("f-price").value=e.單價||"";
   document.getElementById("f-cargo-type").value=e.cargo_type||"普";
+  // 群組下拉切到該記錄所屬群組
+  const tsel=document.getElementById("f-target-group");
+  if(tsel&&e.group_id) tsel.value=e.group_id;
   dimRows=(e.dims?.length>0)?e.dims.map(d=>({len:d.len||"",wid:d.wid||"",hei:d.hei||"",qty:d.qty||1,bulk:!!d.bulk})):[{len:"",wid:"",hei:"",qty:1,bulk:false}];
   renderDimTable();pendingPhotos=[...(e.photos||[])];renderThumbs();calcNet();
-  document.getElementById("form-title").textContent=`編輯：${e.名稱}`;
+  document.getElementById("form-title").textContent=`編輯：${e.名稱||'記錄'}`;
   document.getElementById("submit-btn").textContent="✔ 更新記錄";
+  // 隱藏摘要卡片
+  const summary=document.getElementById('save-summary');
+  if(summary) summary.style.display='none';
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
@@ -1406,16 +1467,18 @@ function renderTable(){
   const q=(document.getElementById("search-input").value||"").toLowerCase();
   const list=entries.filter(e=>!q||e.名稱?.toLowerCase().includes(q)||(e.供應商||"").toLowerCase().includes(q)||(e.備註||"").toLowerCase().includes(q));
   const wrap=document.getElementById("table-wrap");
-  if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無記錄${q?"（無搜尋結果）":""}</div>`;return;}
+  if(!list.length){wrap.innerHTML=`<div class="no-data">📭 尚無未歸批記錄${q?"（無搜尋結果）":""}</div>`;return;}
   const showDel=can.deleteEntry();
-  let html=`<table><thead><tr><th>日期時間</th><th>類型</th><th>名稱</th><th>供應商</th><th>件數</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  let html=`<table><thead><tr>
+    <th style="width:32px;"><input type="checkbox" id="check-all" onchange="toggleCheckAll(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);"></th>
+    <th>日期時間</th><th>類型</th><th>名稱</th><th>供應商</th><th>件數</th><th>長(cm)</th><th>寬(cm)</th><th>高(cm)</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th>
+  </tr></thead><tbody>`;
   list.forEach(e=>{
-    // 取第一筆材積資料顯示
     const dim=(e.dims&&e.dims.length>0)?e.dims[0]:{};
     const photos=e.photos||[];
     const photoHtml=photos.length
       ? `<div style="display:grid;grid-template-columns:repeat(3,36px);gap:3px;">
-          ${photos.slice(0,3).map((url,i)=>{
+          ${photos.slice(0,3).map((url)=>{
             const safe=String(url).replace(/'/g,"&#39;");
             return `<img src="${url}" onclick="openLightbox('${safe}')" style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border);cursor:pointer;">`;
           }).join('')}
@@ -1423,6 +1486,7 @@ function renderTable(){
         </div>`
       : `<span style="color:var(--text3);font-size:12px;">—</span>`;
     html+=`<tr>
+      <td><input type="checkbox" class="entry-check" data-id="${e.id}" onchange="onEntryCheck()" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);"></td>
       <td class="mono" style="font-size:12px;">${(e.日期時間||"").substring(0,16)}</td>
       <td><span class="tag ${e.cargo_type==='特'?'tag-red':'tag-blue'}" style="font-weight:700;">${e.cargo_type||'普'}</span></td>
       <td style="font-weight:600;">${e.名稱||"—"}</td>
@@ -2174,6 +2238,232 @@ function flTogglePhoto(url) {
   else { pendingPhotos.splice(idx, 1); toast('已取消附加', 'info'); }
   renderThumbs();
   renderFormLibrary();
+}
+
+// BATCH MANAGEMENT
+let batches=[], viewingBatchId=null, viewingBatchEntries=[];
+
+// 勾選相關
+function onEntryCheck(){
+  const checked=[...document.querySelectorAll('.entry-check:checked')];
+  const bar=document.getElementById('batch-action-bar');
+  const count=document.getElementById('batch-selected-count');
+  if(!bar)return;
+  if(checked.length>0){
+    bar.style.display='flex';
+    count.textContent=`已選 ${checked.length} 筆`;
+  } else {
+    bar.style.display='none';
+  }
+}
+function toggleCheckAll(cb){
+  document.querySelectorAll('.entry-check').forEach(c=>c.checked=cb.checked);
+  onEntryCheck();
+}
+function clearSelection(){
+  document.querySelectorAll('.entry-check').forEach(c=>c.checked=false);
+  const ca=document.getElementById('check-all');if(ca)ca.checked=false;
+  onEntryCheck();
+}
+function getSelectedIds(){
+  return [...document.querySelectorAll('.entry-check:checked')].map(c=>c.dataset.id);
+}
+
+// 批次下拉更新
+function refreshBatchSelect(){
+  const sel=document.getElementById('batch-select');
+  if(!sel)return;
+  sel.innerHTML=`<option value="">— 選擇批次 —</option>`+
+    batches.map(b=>`<option value="${b.id}">${b.code}${b.notes?' · '+b.notes:''}</option>`).join('');
+}
+
+// 歸入批次
+// 複製圖片到批次專屬路徑
+async function copyPhotosToBatch(entry, batchCode){
+  const photos = entry.photos||[];
+  if(!photos.length) return photos;
+  const newUrls = [];
+  const safeCode = batchCode.replace(/[^a-zA-Z0-9._-]/g,'_');
+  for(let i=0; i<photos.length; i++){
+    const url = photos[i];
+    try{
+      // 下載原圖
+      const res = await fetch(url);
+      if(!res.ok){ newUrls.push(url); continue; }
+      const blob = await res.blob();
+      // 產生新路徑
+      const ext = blob.type.includes('png')?'png':'jpg';
+      const newPath = `batches/${safeCode}/${entry.id}-${i}.${ext}`;
+      // 上傳到批次路徑
+      const{error} = await sb.storage.from(PL_BUCKET).upload(newPath, blob, {
+        cacheControl:'3600', upsert:true, contentType: blob.type||'image/jpeg'
+      });
+      if(error){ newUrls.push(url); continue; }
+      const{data} = sb.storage.from(PL_BUCKET).getPublicUrl(newPath);
+      newUrls.push(data.publicUrl||url);
+    }catch(e){ newUrls.push(url); }
+  }
+  return newUrls;
+}
+
+async function assignToBatch(){
+  const ids=getSelectedIds();
+  const batchId=document.getElementById('batch-select')?.value;
+  if(!ids.length)return toast('請先勾選記錄','error');
+  if(!batchId)return toast('請選擇批次','error');
+  const batch=batches.find(b=>b.id===batchId);
+  const batchCode=batch?.code||batchId;
+
+  // 取出這些記錄的完整資料（含圖片）
+  const selectedEntries=entries.filter(e=>ids.includes(e.id));
+  const withPhotos=selectedEntries.filter(e=>e.photos&&e.photos.length>0);
+
+  showLoading(`歸入批次中... 正在複製圖片 (0/${withPhotos.length})`);
+
+  let copied=0;
+  for(const entry of selectedEntries){
+    if(entry.photos&&entry.photos.length>0){
+      document.getElementById('loading-text').textContent=`複製圖片中 (${++copied}/${withPhotos.length})`;
+      const newPhotos = await copyPhotosToBatch(entry, batchCode);
+      // 更新記錄的圖片網址＋歸入批次
+      await sb.from('entries').update({batch_id:batchId, photos:newPhotos}).eq('id',entry.id);
+    } else {
+      await sb.from('entries').update({batch_id:batchId}).eq('id',entry.id);
+    }
+  }
+
+  hideLoading();
+  toast(`✅ 已將 ${ids.length} 筆記錄歸入「${batchCode}」，圖片已複製備份`,'success');
+  clearSelection();
+  await loadAllEntries();
+}
+
+// 載入批次列表
+async function loadBatches(){
+  showLoading('載入批次...');
+  const{data,error}=await sb.from('batches').select('*').order('created_at',{ascending:false});
+  hideLoading();
+  if(error){toast('載入失敗','error');return;}
+  batches=data||[];
+  refreshBatchSelect();
+  renderBatchList();
+}
+
+function renderBatchList(){
+  const el=document.getElementById('batch-list');if(!el)return;
+  if(!batches.length){
+    el.innerHTML='<div class="no-data" style="grid-column:1/-1;">尚無批次，請新增</div>';return;
+  }
+  el.innerHTML=batches.map(b=>`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:all .2s;${viewingBatchId===b.id?'border-color:var(--accent);background:rgba(79,156,249,.06);':''}"
+      onclick="viewBatch('${b.id}')">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:15px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;">${b.code}</div>
+        <button onclick="event.stopPropagation();deleteBatch('${b.id}','${b.code.replace(/'/g,"\\'")}' )"
+          style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
+      </div>
+      ${b.notes?`<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${b.notes}</div>`:''}
+      <div style="font-size:11px;color:var(--text3);">${(b.created_at||'').substring(0,10)} · 建立人：${b.created_by||'—'}</div>
+      <div style="margin-top:10px;"><span class="btn btn-ghost btn-sm" style="font-size:12px;">📋 查看記錄</span></div>
+    </div>`).join('');
+}
+
+async function viewBatch(id){
+  viewingBatchId=id;
+  renderBatchList();
+  const batch=batches.find(b=>b.id===id);
+  showLoading('載入批次記錄...');
+  const{data,error}=await sb.from('entries').select('*').eq('batch_id',id).order('created_at',{ascending:false});
+  hideLoading();
+  if(error){toast('載入失敗','error');return;}
+  viewingBatchEntries=data||[];
+  document.getElementById('batch-records-title').textContent=`批次「${batch?.code}」— 共 ${viewingBatchEntries.length} 筆`;
+  document.getElementById('batch-records-area').style.display='block';
+  renderBatchTable();
+  document.getElementById('batch-records-area').scrollIntoView({behavior:'smooth'});
+}
+
+function closeBatchRecords(){
+  document.getElementById('batch-records-area').style.display='none';
+  viewingBatchId=null;
+  renderBatchList();
+}
+
+function renderBatchTable(){
+  const wrap=document.getElementById('batch-table-wrap');
+  if(!viewingBatchEntries.length){wrap.innerHTML='<div class="no-data">此批次尚無記錄</div>';return;}
+  let html=`<table><thead><tr><th>日期時間</th><th>類型</th><th>名稱</th><th>供應商</th><th>件數</th><th>總重(kg)</th><th>板重(kg)</th><th>圖片</th><th>操作員</th><th>備註</th><th>操作</th></tr></thead><tbody>`;
+  viewingBatchEntries.forEach(e=>{
+    const photos=e.photos||[];
+    const photoHtml=photos.length
+      ?`<div style="display:flex;gap:3px;">${photos.slice(0,3).map(url=>{
+          const safe=String(url).replace(/'/g,"&#39;");
+          return `<img src="${url}" onclick="openLightbox('${safe}')" style="width:34px;height:34px;object-fit:contain;border-radius:4px;border:1px solid var(--border);cursor:pointer;">`;
+        }).join('')}${photos.length>3?`<span style="font-size:11px;color:var(--accent);padding:0 4px;align-self:center;">+${photos.length-3}</span>`:''}</div>`
+      :`<span style="color:var(--text3);font-size:12px;">—</span>`;
+    html+=`<tr>
+      <td class="mono" style="font-size:12px;">${(e.日期時間||'').substring(0,16)}</td>
+      <td><span class="tag ${e.cargo_type==='特'?'tag-red':'tag-blue'}" style="font-weight:700;">${e.cargo_type||'普'}</span></td>
+      <td style="font-weight:600;">${e.名稱||'—'}</td>
+      <td>${e.供應商||'—'}</td>
+      <td class="mono">${e.件數||'—'}</td>
+      <td class="mono">${e.總重||'—'}</td>
+      <td class="mono">${e.板重||'—'}</td>
+      <td>${photoHtml}</td>
+      <td><span class="tag tag-blue">${e.operator||'—'}</span></td>
+      <td style="font-size:12px;color:var(--text2);">${e.備註||''}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="removeFromBatch('${e.id}')">移出批次</button></td>
+    </tr>`;
+  });
+  html+=`</tbody></table>`;
+  wrap.innerHTML=html;
+}
+
+async function removeFromBatch(id){
+  if(!confirm('確定將此記錄移出批次？'))return;
+  const{error}=await sb.from('entries').update({batch_id:null}).eq('id',id);
+  if(error){toast('操作失敗','error');return;}
+  toast('已移出批次','info');
+  await viewBatch(viewingBatchId);
+}
+
+function exportBatchExcel(){
+  if(!viewingBatchEntries.length){toast('無資料可匯出','error');return;}
+  const batch=batches.find(b=>b.id===viewingBatchId);
+  const wb=XLSX.utils.book_new();
+  const wsData=[['日期時間','類型','名稱','供應商','件數','總重(kg)','板重(kg)','淨重(kg)','操作員','備註','圖片1','圖片2','圖片3']];
+  viewingBatchEntries.forEach(e=>{
+    const photos=e.photos||[];
+    wsData.push([e.日期時間||'',e.cargo_type||'普',e.名稱||'',e.供應商||'',e.件數||'',e.總重||'',e.板重||'',e.淨重||'',e.operator||'',e.備註||'',photos[0]||'',photos[1]||'',photos[2]||'']);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(wsData);
+  ws['!cols']=[{wch:16},{wch:5},{wch:14},{wch:12},{wch:6},{wch:8},{wch:8},{wch:8},{wch:10},{wch:20},{wch:50},{wch:50},{wch:50}];
+  XLSX.utils.book_append_sheet(wb,ws,batch?.code||'批次');
+  const buf=XLSX.write(wb,{bookType:'xlsx',type:'array'});
+  saveAs(new Blob([buf],{type:'application/octet-stream'}),`批次_${batch?.code||'export'}.xlsx`);
+  toast('匯出完成','success');
+}
+
+// 批次 Modal
+function openBatchModal(){document.getElementById('batch-modal').classList.add('show');document.getElementById('bm-code').value='';document.getElementById('bm-notes').value='';}
+function closeBatchModal(){document.getElementById('batch-modal').classList.remove('show');}
+async function saveBatch(){
+  const code=document.getElementById('bm-code').value.trim();
+  if(!code)return toast('請輸入批次編碼','error');
+  const{error}=await sb.from('batches').insert({code,notes:document.getElementById('bm-notes').value.trim()||null,created_by:currentUser.name});
+  if(error){toast('建立失敗：'+error.message,'error');return;}
+  toast(`批次「${code}」已建立`,'success');
+  closeBatchModal();await loadBatches();
+}
+async function deleteBatch(id,code){
+  if(!confirm(`確定刪除批次「${code}」？\n（記錄不會被刪除，只是移出批次）`))return;
+  // 先將此批次所有記錄的 batch_id 清空
+  await sb.from('entries').update({batch_id:null}).eq('batch_id',id);
+  const{error}=await sb.from('batches').delete().eq('id',id);
+  if(error){toast('刪除失敗','error');return;}
+  if(viewingBatchId===id)closeBatchRecords();
+  toast('批次已刪除，記錄已移回未歸批','info');
+  await loadBatches();
 }
 
 // INIT
