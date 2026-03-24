@@ -677,6 +677,16 @@ tr:hover td{background:rgba(79,156,249,.04);}
 <div class="page" id="page-admin">
   <div style="margin-bottom:20px;"><h2 style="font-size:18px;font-weight:700;">⚙️ 系統管理</h2></div>
 
+  <!-- 安全性提醒 -->
+  <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:600;color:var(--danger);margin-bottom:8px;">🔒 安全性提醒（請管理員注意）</div>
+    <ul style="font-size:12px;color:var(--text2);line-height:2;padding-left:16px;margin:0;">
+      <li>目前密碼以<strong style="color:var(--warning)">明文</strong>儲存於資料庫，強烈建議改用 <a href="https://supabase.com/docs/guides/auth" target="_blank" style="color:var(--accent);">Supabase Auth</a> 取代現有登入機制。</li>
+      <li>Anon Key 寫死在前端原始碼中，請務必在 Supabase 後台為每個資料表設定 <a href="https://supabase.com/docs/guides/database/postgres/row-level-security" target="_blank" style="color:var(--accent);">Row Level Security（RLS）</a> 規則。</li>
+      <li>所有角色權限僅在前端判斷，無 RLS 保護時任何人皆可繞過。</li>
+    </ul>
+  </div>
+
   <!-- 容量使用狀況 -->
   <div class="card">
     <div class="card-title"><span class="bar bar-cyan"></span>💾 儲存空間使用狀況
@@ -847,6 +857,53 @@ CREATE TABLE IF NOT EXISTS delete_logs (
   </div>
 </div>
 
+<!-- ADD USER MODAL（取代 prompt() 對話框） -->
+<div class="modal-overlay" id="add-user-modal">
+  <div class="modal-box" style="width:400px;">
+    <div class="modal-title">🔑 新增帳號 <button class="modal-close" onclick="closeAddUserModal()">✕</button></div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>帳號名稱 <span style="color:var(--danger)">*</span></label>
+      <input type="text" id="au-name" placeholder="輸入帳號名稱">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label>角色 <span style="color:var(--danger)">*</span></label>
+      <select id="au-role">
+        <option value="user">👤 一般（user）</option>
+        <option value="supervisor">📋 主管（supervisor）</option>
+        <option value="admin">🔑 管理員（admin）</option>
+        <option value="guest">👁 訪客（guest）— 只能建立到貨單</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:4px;">
+      <label>密碼 <span style="color:var(--danger)">*</span></label>
+      <input type="password" id="au-pw" placeholder="設定密碼">
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px;">⚠️ 密碼目前以明文儲存，建議改用 Supabase Auth 以提升安全性。</p>
+    <div id="au-err" style="color:var(--danger);font-size:13px;min-height:18px;margin-bottom:8px;"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeAddUserModal()">取消</button>
+      <button class="btn btn-primary" onclick="submitAddUser()">＋ 建立帳號</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT PASSWORD MODAL（取代 prompt() 對話框） -->
+<div class="modal-overlay" id="edit-pw-modal">
+  <div class="modal-box" style="width:380px;">
+    <div class="modal-title">🔐 修改密碼 <button class="modal-close" onclick="closeEditPwModal()">✕</button></div>
+    <p id="ep-username" style="font-size:14px;color:var(--text2);margin-bottom:14px;"></p>
+    <div class="form-group" style="margin-bottom:4px;">
+      <label>新密碼 <span style="color:var(--danger)">*</span></label>
+      <input type="password" id="ep-pw" placeholder="輸入新密碼">
+    </div>
+    <div id="ep-err" style="color:var(--danger);font-size:13px;min-height:18px;margin:8px 0;"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeEditPwModal()">取消</button>
+      <button class="btn btn-warning" onclick="submitEditPw()">💾 儲存新密碼</button>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close">✕</button>
   <img id="lightbox-img" src="" alt="">
@@ -949,8 +1006,10 @@ function doLogin(){
   localStorage.setItem('current_user', JSON.stringify(currentUser));
   document.getElementById("login-screen").style.display="none";
   document.getElementById("main-app").style.display="block";
-  document.getElementById("login-username").value="";
-  document.getElementById("login-pw").value="";
+  const unEl=document.getElementById("login-username");
+  const pwEl=document.getElementById("login-pw");
+  if(unEl){unEl.value="";unEl.blur();}
+  if(pwEl){pwEl.value="";pwEl.blur();}
   document.getElementById("login-err").textContent="";
   onAfterLogin();
 }
@@ -989,35 +1048,70 @@ async function onAfterLogin(){
 }
 
 // USER MANAGEMENT
-async function renderUsersTable(){
-  const users=await loadUsers();
-  const rows=users.map(u=>`<tr><td>${u.name}</td><td>${roleBadgeHTML(u.role)}</td>
+// 合併兩個重複函式為一個，傳入 targetId 決定更新哪個 DOM 元素
+function _buildUsersRows(users){
+  return users.map(u=>`<tr><td>${u.name}</td><td>${roleBadgeHTML(u.role)}</td>
     <td><button class="btn btn-warning btn-sm" onclick="editUserPrompt('${u.id}','${u.name}')">修改密碼</button>
     ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteUser('${u.id}','${u.name}')">刪除</button>`:""}</td></tr>`).join("");
+}
+async function renderUsersTable(){
+  const users=await loadUsers();
+  const rows=_buildUsersRows(users);
   const el=document.getElementById("users-tbody");if(el)el.innerHTML=rows;
 }
 async function renderAdminUsers(){
   const users=await loadUsers();
-  const rows=users.map(u=>`<tr><td>${u.name}</td><td>${roleBadgeHTML(u.role)}</td>
-    <td><button class="btn btn-warning btn-sm" onclick="editUserPrompt('${u.id}','${u.name}')">修改密碼</button>
-    ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteUser('${u.id}','${u.name}')">刪除</button>`:""}</td></tr>`).join("");
+  const rows=_buildUsersRows(users);
   const el=document.getElementById("admin-users-tbody");if(el)el.innerHTML=rows;
 }
-async function addUserPrompt(){
-  const name=prompt("新帳號名稱：");if(!name?.trim())return;
-  const role=prompt("角色（admin/supervisor/user/guest）：\n• admin = 管理員\n• supervisor = 主管\n• user = 一般\n• guest = 訪客（只能建立到貨單）","user");
-  if(!["admin","supervisor","user","guest"].includes(role))return alert("角色無效，請輸入 admin / supervisor / user / guest");
-  const pw=prompt("設定密碼：");if(!pw)return;
-  const users=await loadUsers();
-  if(users.find(u=>u.name===name.trim()))return alert("帳號已存在");
-  const{error}=await sb.from('users').insert({name:name.trim(),role,pw});
-  if(error){toast("新增失敗："+error.message,"error");return;}
-  await renderUsersTable();await renderAdminUsers();await initLoginScreen();toast("帳號已新增","success");
+function addUserPrompt(){
+  document.getElementById('au-name').value='';
+  document.getElementById('au-pw').value='';
+  document.getElementById('au-role').value='user';
+  document.getElementById('au-err').textContent='';
+  document.getElementById('add-user-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('au-name').focus(),100);
 }
-async function editUserPrompt(id,name){
-  const pw=prompt(`修改「${name}」密碼：`);if(!pw)return;
-  const{error}=await sb.from('users').update({pw}).eq('id',id);
-  if(error){toast("更新失敗","error");return;}toast("密碼已更新","success");
+function closeAddUserModal(){
+  document.getElementById('add-user-modal').classList.remove('show');
+}
+async function submitAddUser(){
+  const name=document.getElementById('au-name').value.trim();
+  const role=document.getElementById('au-role').value;
+  const pw=document.getElementById('au-pw').value;
+  const errEl=document.getElementById('au-err');
+  if(!name){errEl.textContent='❌ 請輸入帳號名稱';return;}
+  if(!pw){errEl.textContent='❌ 請設定密碼';return;}
+  errEl.textContent='';
+  const users=await loadUsers();
+  if(users.find(u=>u.name===name)){errEl.textContent='❌ 帳號名稱已存在';return;}
+  const{error}=await sb.from('users').insert({name,role,pw});
+  if(error){errEl.textContent='❌ 新增失敗：'+error.message;return;}
+  closeAddUserModal();
+  await renderUsersTable();await renderAdminUsers();await initLoginScreen();
+  toast('帳號「'+name+'」已新增','success');
+}
+let _editingUserId=null;
+function editUserPrompt(id,name){
+  _editingUserId=id;
+  document.getElementById('ep-username').textContent=`帳號：${name}`;
+  document.getElementById('ep-pw').value='';
+  document.getElementById('ep-err').textContent='';
+  document.getElementById('edit-pw-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('ep-pw').focus(),100);
+}
+function closeEditPwModal(){
+  document.getElementById('edit-pw-modal').classList.remove('show');
+  _editingUserId=null;
+}
+async function submitEditPw(){
+  const pw=document.getElementById('ep-pw').value;
+  const errEl=document.getElementById('ep-err');
+  if(!pw){errEl.textContent='❌ 請輸入新密碼';return;}
+  const{error}=await sb.from('users').update({pw}).eq('id',_editingUserId);
+  if(error){errEl.textContent='❌ 更新失敗：'+error.message;return;}
+  closeEditPwModal();
+  toast('密碼已更新','success');
 }
 // DELETE LOG
 async function logDelete(table_name, record_id, record_summary){
@@ -1029,7 +1123,7 @@ async function logDelete(table_name, record_id, record_summary){
 }
 
 async function deleteUser(id,name){
-  if(!can.manageUsers())return alert("無刪除權限");
+  if(!can.manageUsers())return toast("無刪除權限","error");
   if(!confirm(`確定刪除帳號「${name}」？`))return;
   await logDelete('users', id, `帳號：${name}`);
   const{error}=await sb.from('users').delete().eq('id',id);
@@ -1052,7 +1146,7 @@ async function createGroup(){
   groups.push(data);renderGroups();toast(`群組「${name}」已建立`,"success");selectGroup(data);
 }
 async function deleteGroup(id,name){
-  if(!can.deleteGroup())return alert("無刪除權限");
+  if(!can.deleteGroup())return toast("無刪除權限","error");
   if(!confirm(`確定刪除群組「${name}」？`))return;
   showLoading("刪除中...");
   await logDelete('groups', id, `群組：${name}`);
@@ -1072,10 +1166,18 @@ function renderGroups(){
       ${can.deleteGroup()?`<span class="chip-del" onclick="event.stopPropagation();deleteGroup('${g.id}','${g.name.replace(/'/g,"\\'")}')">✕</span>`:""}`;
     row.appendChild(chip);
   });
-  groups.forEach(async g=>{
-    const{count}=await sb.from("entries").select("*",{count:"exact",head:true}).eq("group_id",g.id);
-    const el=document.getElementById("chip-cnt-"+g.id);if(el)el.textContent=count||0;
-  });
+  // 單次查詢取得所有群組的記錄數，避免 N+1 請求
+  if(groups.length){
+    const ids=groups.map(g=>g.id);
+    sb.from("entries").select("group_id").in("group_id",ids).then(({data})=>{
+      const countMap={};
+      (data||[]).forEach(e=>{countMap[e.group_id]=(countMap[e.group_id]||0)+1;});
+      groups.forEach(g=>{
+        const el=document.getElementById("chip-cnt-"+g.id);
+        if(el)el.textContent=countMap[g.id]||0;
+      });
+    });
+  }
 }
 function selectGroup(g){
   if(typeof g==="string")g=groups.find(x=>x.id===g);
@@ -1218,7 +1320,7 @@ async function submitEntry(){
   refreshFilterDropdown();
 }
 async function deleteEntry(id,name){
-  if(!can.deleteEntry())return alert("無刪除權限");
+  if(!can.deleteEntry())return toast("無刪除權限","error");
   if(!confirm(`確定刪除「${name}」？`))return;
   showLoading("刪除中...");
   await logDelete('entries', id, `進貨記錄：${name}，群組：${currentGroup?.name||''}`);
@@ -1227,7 +1329,7 @@ async function deleteEntry(id,name){
   toast("已刪除","info");await loadEntries(currentGroup.id);
 }
 function editEntry(id){
-  if(!can.editEntry())return alert("無修改權限");
+  if(!can.editEntry())return toast("無修改權限","error");
   const e=entries.find(x=>x.id===id);if(!e)return;
   editingId=id;
   // 先切換到進貨登記頁面
@@ -1445,8 +1547,12 @@ function renderThumbs(){
   }).join('');
 }
 
-function openLightbox(src){document.getElementById("lightbox-img").src=src;document.getElementById("lightbox").classList.add("show");}
-function closeLightbox(){document.getElementById("lightbox").classList.remove("show");}
+function openLightbox(src){
+  const lb=document.getElementById('lightbox');
+  lb.classList.add('show');
+  lb.onclick=closeLightbox;
+  lb.innerHTML=`<button class="lightbox-close" onclick="closeLightbox()">✕</button><img id="lightbox-img" src="${src}" alt="">`;
+}
 
 // 顯示全部照片（點 +N 時）
 let _allPhotos=[];let _allPhotoIdx=0;
@@ -1521,7 +1627,7 @@ function renderTable(){
   wrap.innerHTML=html;
 }
 function exportExcel(){
-  if(!can.exportExcel())return alert("無匯出權限");
+  if(!can.exportExcel())return toast("無匯出權限","error");
   if(!entries.length){toast("無資料可匯出","error");return;}
   showLoading("匯出中...");
 
@@ -1730,7 +1836,7 @@ function openProductModal(id=null){
 }
 function closeProductModal(){document.getElementById('product-modal').classList.remove('show');editingProductId=null;}
 async function saveProduct(){
-  const name=document.getElementById('pm-name').value.trim();if(!name)return alert('請輸入商品名稱');
+  const name=document.getElementById('pm-name').value.trim();if(!name)return toast('請輸入商品名稱','error');
   const payload={name,code:document.getElementById('pm-code').value.trim()||null,category:document.getElementById('pm-category').value.trim()||null,
     unit:document.getElementById('pm-unit').value.trim()||null,stock:parseFloat(document.getElementById('pm-stock').value)||0,
     min_stock:parseFloat(document.getElementById('pm-minstock').value)||0,cost:parseFloat(document.getElementById('pm-cost').value)||null,
@@ -1742,7 +1848,7 @@ async function saveProduct(){
   toast(editingProductId?"商品已更新":"商品已新增","success");closeProductModal();await loadInventory();
 }
 async function deleteProduct(id,name){
-  if(!can.editInventory())return alert("無刪除權限");
+  if(!can.editInventory())return toast("無刪除權限","error");
   if(!confirm(`確定刪除商品「${name}」？`))return;
   await logDelete('products', id, `商品：${name}`);
   const{error}=await sb.from('products').delete().eq('id',id);
@@ -1789,7 +1895,7 @@ function openCustomerModal(id=null){
 }
 function closeCustomerModal(){document.getElementById('customer-modal').classList.remove('show');editingCustomerId=null;}
 async function saveCustomer(){
-  const name=document.getElementById('cm-name').value.trim();if(!name)return alert('請輸入客戶名稱');
+  const name=document.getElementById('cm-name').value.trim();if(!name)return toast('請輸入客戶名稱','error');
   const payload={name,contact:document.getElementById('cm-contact').value.trim()||null,phone:document.getElementById('cm-phone').value.trim()||null,
     email:document.getElementById('cm-email').value.trim()||null,address:document.getElementById('cm-address').value.trim()||null,
     type:document.getElementById('cm-type').value,credit_limit:parseFloat(document.getElementById('cm-credit').value)||null,
@@ -1801,7 +1907,7 @@ async function saveCustomer(){
   toast(editingCustomerId?"客戶已更新":"客戶已新增","success");closeCustomerModal();await loadCustomers();
 }
 async function deleteCustomer(id,name){
-  if(!can.editCustomers())return alert("無刪除權限");
+  if(!can.editCustomers())return toast("無刪除權限","error");
   if(!confirm(`確定刪除客戶「${name}」？`))return;
   await logDelete('customers', id, `客戶：${name}`);
   const{error}=await sb.from('customers').delete().eq('id',id);
@@ -1947,7 +2053,7 @@ function closeDeliveryModal(){document.getElementById('delivery-modal').classLis
 
 async function saveDelivery(){
   const code=document.getElementById('dlv-code').value.trim();
-  if(!code)return alert('請輸入單號');
+  if(!code)return toast('請輸入單號','error');
   const status=document.getElementById('dlv-status').value||'pending';
   const payload={
     code,
@@ -1971,7 +2077,7 @@ async function saveDelivery(){
 }
 
 async function deleteDelivery(id,code){
-  if(!can.deleteDelivery())return alert("無刪除權限");
+  if(!can.deleteDelivery())return toast("無刪除權限","error");
   if(!confirm(`確定刪除到貨單「${code}」？`))return;
   await logDelete('deliveries', id, `到貨單：${code}`);
   const{error}=await sb.from('deliveries').delete().eq('id',id);
@@ -2595,8 +2701,9 @@ async function saveBatch(){
 }
 async function deleteBatch(id,code){
   if(!confirm(`確定刪除批次「${code}」？\n（記錄不會被刪除，只是移出批次）`))return;
-  // 先將此批次所有記錄的 batch_id 清空
-  await sb.from('entries').update({batch_id:null}).eq('batch_id',id);
+  // 先將此批次所有記錄的 batch_id 清空，確認成功再刪批次
+  const{error:unlinkErr}=await sb.from('entries').update({batch_id:null}).eq('batch_id',id);
+  if(unlinkErr){toast('移除批次關聯失敗，已取消刪除','error');return;}
   const{error}=await sb.from('batches').delete().eq('id',id);
   if(error){toast('刪除失敗','error');return;}
   if(viewingBatchId===id)closeBatchRecords();
