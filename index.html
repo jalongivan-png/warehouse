@@ -472,7 +472,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
 <!-- BATCH MODAL -->
 <div class="modal-overlay" id="batch-modal">
   <div class="modal-box" style="width:420px;">
-    <div class="modal-title">🗂 新增批次<button class="modal-close" onclick="closeBatchModal()">✕</button></div>
+    <div class="modal-title"><span id="bm-modal-title">🗂 新增批次</span><button class="modal-close" onclick="closeBatchModal()">✕</button></div>
     <div class="form-group" style="margin-bottom:14px;">
       <label>批次編碼 <span style="color:var(--danger)">*</span></label>
       <input type="text" id="bm-code" placeholder="例：W2026-03-24、船期001">
@@ -483,7 +483,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeBatchModal()">取消</button>
-      <button class="btn btn-primary" onclick="saveBatch()">📌 建立批次</button>
+      <button class="btn btn-primary" id="bm-save-btn" onclick="saveBatch()">📌 建立批次</button>
     </div>
   </div>
 </div>
@@ -654,7 +654,18 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div class="card">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
       <div class="card-title" style="margin-bottom:0;"><span class="bar bar-blue"></span>已上傳照片 <span id="pl-count" style="color:var(--text3);font-size:12px;font-weight:400;margin-left:6px;"></span></div>
-      <button class="btn btn-ghost btn-sm" onclick="loadPhotoLibrary()">🔄 重新整理</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="plToggleSelectMode()" id="pl-select-btn">☑ 多選刪除</button>
+        <button class="btn btn-ghost btn-sm" onclick="loadPhotoLibrary()">🔄 重新整理</button>
+      </div>
+    </div>
+    <!-- 多選操作列 -->
+    <div id="pl-select-bar" style="display:none;background:rgba(79,156,249,.08);border:1px solid rgba(79,156,249,.2);border-radius:10px;padding:10px 14px;margin-bottom:12px;display:none;align-items:center;gap:10px;flex-wrap:wrap;">
+      <span id="pl-selected-count" style="font-size:13px;color:var(--accent);font-weight:600;">已選 0 張</span>
+      <button class="btn btn-ghost btn-sm" onclick="plSelectAll()">全選</button>
+      <button class="btn btn-ghost btn-sm" onclick="plClearSelect()">取消全選</button>
+      <button class="btn btn-success btn-sm" onclick="plDownloadSelected()">⬇ 下載選取</button>
+      <button class="btn btn-danger btn-sm" onclick="plDeleteSelected()">🗑 刪除選取</button>
     </div>
     <div id="pl-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;">
       <div class="no-data" style="grid-column:1/-1;">⏳ 載入中...</div>
@@ -2131,15 +2142,103 @@ async function loadPhotoLibrary() {
   renderPlGrid();
 }
 
+let plSelectMode=false;
+let plSelectedNames=new Set();
+
+function plToggleSelectMode(){
+  plSelectMode=!plSelectMode;
+  plSelectedNames.clear();
+  const btn=document.getElementById('pl-select-btn');
+  const bar=document.getElementById('pl-select-bar');
+  if(btn) btn.textContent=plSelectMode?'✕ 結束多選':'☑ 多選刪除';
+  if(bar) bar.style.display=plSelectMode?'flex':'none';
+  renderPlGrid();
+}
+function plSelectAll(){
+  plAllPhotos.forEach(p=>plSelectedNames.add(p.name));
+  document.getElementById('pl-selected-count').textContent=`已選 ${plSelectedNames.size} 張`;
+  renderPlGrid();
+}
+function plClearSelect(){
+  plSelectedNames.clear();
+  document.getElementById('pl-selected-count').textContent='已選 0 張';
+  renderPlGrid();
+}
+async function plDownloadSelected(){
+  if(!plSelectedNames.size)return toast('請先選取照片','error');
+  const names=[...plSelectedNames];
+  toast(`開始下載 ${names.length} 張，請稍候...`,'info');
+  showLoading(`下載中... 0/${names.length}`);
+  let done=0;
+  for(const name of names){
+    document.getElementById('loading-text').textContent=`下載中... ${done+1}/${names.length}`;
+    const photo=plAllPhotos.find(p=>p.name===name);
+    if(!photo){done++;continue;}
+    try{
+      const res=await fetch(photo.url);
+      if(!res.ok){done++;continue;}
+      const blob=await res.blob();
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(a.href);
+      // 稍微間隔避免瀏覽器擋住多次下載
+      await new Promise(r=>setTimeout(r,400));
+      done++;
+    }catch(e){done++;}
+  }
+  hideLoading();
+  toast(`✅ 已下載 ${done} 張照片`,'success');
+}
+  if(!plSelectedNames.size)return toast('請先選取照片','error');
+  if(!confirm(`確定刪除選取的 ${plSelectedNames.size} 張照片？`))return;
+  showLoading(`刪除中... 0/${plSelectedNames.size}`);
+  const names=[...plSelectedNames];
+  let done=0;
+  for(const name of names){
+    document.getElementById('loading-text').textContent=`刪除中... ${++done}/${names.length}`;
+    await sb.storage.from(PL_BUCKET).remove([`${PL_FOLDER}/${name}`]);
+  }
+  hideLoading();
+  toast(`✅ 已刪除 ${names.size||done} 張照片`,'success');
+  plSelectedNames.clear();
+  plSelectMode=false;
+  const btn=document.getElementById('pl-select-btn');
+  if(btn) btn.textContent='☑ 多選刪除';
+  const bar=document.getElementById('pl-select-bar');
+  if(bar) bar.style.display='none';
+  await loadPhotoLibrary();
+}
+
 function renderPlGrid() {
   const grid = document.getElementById('pl-grid');
   if (!plAllPhotos.length) { grid.innerHTML = '<div class="no-data" style="grid-column:1/-1;">尚無照片，請上傳</div>'; return; }
-  grid.innerHTML = plAllPhotos.map(p => `
-    <div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);aspect-ratio:1;cursor:pointer;" onclick="openLightbox('${p.url.replace(/'/g,"&#39;")}')">
+  grid.innerHTML = plAllPhotos.map(p => {
+    const isSelected=plSelectedNames.has(p.name);
+    const safeUrl=p.url.replace(/'/g,"&#39;");
+    const safeName=p.name.replace(/'/g,"&#39;");
+    if(plSelectMode){
+      return `<div onclick="plTogglePhoto('${safeName}')"
+        style="position:relative;border-radius:8px;overflow:hidden;border:2px solid ${isSelected?'var(--danger)':'var(--border)'};background:var(--surface2);aspect-ratio:1;cursor:pointer;transition:border-color .2s;">
+        <img src="${p.url}" style="width:100%;height:100%;object-fit:contain;padding:2px;" loading="lazy">
+        <div style="position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:50%;background:${isSelected?'var(--danger)':'rgba(0,0,0,.5)'};border:2px solid white;display:flex;align-items:center;justify-content:center;font-size:12px;color:white;">${isSelected?'✓':''}</div>
+      </div>`;
+    }
+    return `<div style="position:relative;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);aspect-ratio:1;cursor:pointer;" onclick="openLightbox('${safeUrl}')">
       <img src="${p.url}" style="width:100%;height:100%;object-fit:contain;padding:2px;" loading="lazy">
-      <button onclick="event.stopPropagation();plDeletePhoto('${p.name.replace(/'/g,"&#39;")}')"
+      <button onclick="event.stopPropagation();plDeletePhoto('${safeName}')"
         style="position:absolute;top:4px;right:4px;background:rgba(239,68,68,.85);border:none;color:white;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+function plTogglePhoto(name){
+  if(plSelectedNames.has(name)) plSelectedNames.delete(name);
+  else plSelectedNames.add(name);
+  document.getElementById('pl-selected-count').textContent=`已選 ${plSelectedNames.size} 張`;
+  renderPlGrid();
 }
 
 async function plHandleUpload(e) {
@@ -2359,8 +2458,12 @@ function renderBatchList(){
       onclick="viewBatch('${b.id}')">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:15px;font-weight:700;color:var(--accent);font-family:'DM Mono',monospace;">${b.code}</div>
-        <button onclick="event.stopPropagation();deleteBatch('${b.id}','${b.code.replace(/'/g,"\\'")}' )"
-          style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
+        <div style="display:flex;gap:4px;">
+          <button onclick="event.stopPropagation();openEditBatchModal('${b.id}')"
+            style="background:rgba(79,156,249,.1);border:1px solid rgba(79,156,249,.2);color:var(--accent);cursor:pointer;font-size:12px;padding:3px 8px;border-radius:6px;">✏️ 編輯</button>
+          <button onclick="event.stopPropagation();deleteBatch('${b.id}','${b.code.replace(/'/g,"\\'")}' )"
+            style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;">✕</button>
+        </div>
       </div>
       ${b.notes?`<div style="font-size:12px;color:var(--text2);margin-bottom:8px;">${b.notes}</div>`:''}
       <div style="font-size:11px;color:var(--text3);">${(b.created_at||'').substring(0,10)} · 建立人：${b.created_by||'—'}</div>
@@ -2445,15 +2548,49 @@ function exportBatchExcel(){
 }
 
 // 批次 Modal
-function openBatchModal(){document.getElementById('batch-modal').classList.add('show');document.getElementById('bm-code').value='';document.getElementById('bm-notes').value='';}
-function closeBatchModal(){document.getElementById('batch-modal').classList.remove('show');}
+let editingBatchId=null;
+function openBatchModal(){
+  editingBatchId=null;
+  document.getElementById('bm-modal-title').textContent='🗂 新增批次';
+  document.getElementById('bm-save-btn').textContent='📌 建立批次';
+  document.getElementById('bm-code').value='';
+  document.getElementById('bm-notes').value='';
+  document.getElementById('batch-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('bm-code').focus(),100);
+}
+function openEditBatchModal(id){
+  const b=batches.find(x=>x.id===id);if(!b)return;
+  editingBatchId=id;
+  document.getElementById('bm-modal-title').textContent='✏️ 編輯批次';
+  document.getElementById('bm-save-btn').textContent='💾 儲存修改';
+  document.getElementById('bm-code').value=b.code||'';
+  document.getElementById('bm-notes').value=b.notes||'';
+  document.getElementById('batch-modal').classList.add('show');
+  setTimeout(()=>document.getElementById('bm-code').focus(),100);
+}
+function closeBatchModal(){
+  document.getElementById('batch-modal').classList.remove('show');
+  editingBatchId=null;
+}
 async function saveBatch(){
   const code=document.getElementById('bm-code').value.trim();
   if(!code)return toast('請輸入批次編碼','error');
-  const{error}=await sb.from('batches').insert({code,notes:document.getElementById('bm-notes').value.trim()||null,created_by:currentUser.name});
-  if(error){toast('建立失敗：'+error.message,'error');return;}
-  toast(`批次「${code}」已建立`,'success');
-  closeBatchModal();await loadBatches();
+  const notes=document.getElementById('bm-notes').value.trim()||null;
+  let error;
+  if(editingBatchId){
+    ({error}=await sb.from('batches').update({code,notes}).eq('id',editingBatchId));
+    if(!error) toast(`批次已更新為「${code}」`,'success');
+  } else {
+    ({error}=await sb.from('batches').insert({code,notes,created_by:currentUser.name}));
+    if(!error) toast(`批次「${code}」已建立`,'success');
+  }
+  if(error){toast('操作失敗：'+error.message,'error');return;}
+  closeBatchModal();
+  await loadBatches();
+  // 若正在查看的批次被編輯，更新標題
+  if(editingBatchId&&viewingBatchId===editingBatchId){
+    document.getElementById('batch-records-title').textContent=`批次「${code}」— 共 ${viewingBatchEntries.length} 筆`;
+  }
 }
 async function deleteBatch(id,code){
   if(!confirm(`確定刪除批次「${code}」？\n（記錄不會被刪除，只是移出批次）`))return;
