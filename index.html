@@ -933,6 +933,28 @@ CREATE TABLE IF NOT EXISTS delete_logs (
   </div>
 </div>
 
+<!-- 修改角色 Modal -->
+<div class="modal-overlay" id="edit-role-modal">
+  <div class="modal-box" style="width:380px;">
+    <div class="modal-title">👤 修改角色 <button class="modal-close" onclick="closeEditRoleModal()">✕</button></div>
+    <p id="er-username" style="font-size:14px;color:var(--text2);margin-bottom:16px;"></p>
+    <div class="form-group" style="margin-bottom:4px;">
+      <label>角色</label>
+      <select id="er-role">
+        <option value="admin">🔑 管理員（admin）— 全部權限</option>
+        <option value="supervisor">📋 主管（supervisor）— 可刪除、匯出</option>
+        <option value="user">👤 一般（user）— 可新增記錄</option>
+        <option value="guest">👁 訪客（guest）— 只能建立到貨單</option>
+      </select>
+    </div>
+    <div id="er-err" style="color:var(--danger);font-size:13px;min-height:18px;margin:8px 0;"></div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" onclick="closeEditRoleModal()">取消</button>
+      <button class="btn btn-primary" onclick="submitEditRole()">💾 儲存角色</button>
+    </div>
+  </div>
+</div>
+
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <button class="lightbox-close">✕</button>
   <img id="lightbox-img" src="" alt="">
@@ -1150,8 +1172,11 @@ async function loadProfiles(){
 }
 function _buildUsersRows(users){
   return users.map(u=>`<tr><td>${u.name}</td><td>${roleBadgeHTML(u.role)}</td>
-    <td><button class="btn btn-warning btn-sm" onclick="editUserPrompt('${u.id}','${u.name}')">修改密碼</button>
-    ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteUser('${u.id}','${u.name}')">刪除</button>`:""}</td></tr>`).join("");
+    <td style="white-space:nowrap;">
+      <button class="btn btn-warning btn-sm" onclick="editUserPrompt('${u.id}','${u.name}','${u.role}')">修改密碼</button>
+      <button class="btn btn-ghost btn-sm" style="margin-left:4px;" onclick="editRolePrompt('${u.id}','${u.name}','${u.role}')">修改角色</button>
+      ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteUser('${u.id}','${u.name}')">刪除</button>`:""}
+    </td></tr>`).join("");
 }
 async function renderUsersTable(){
   const users=await loadProfiles();
@@ -1207,6 +1232,26 @@ function editUserPrompt(id,name){
   setTimeout(()=>document.getElementById('ep-pw').focus(),100);
 }
 function closeEditPwModal(){document.getElementById('edit-pw-modal').classList.remove('show');_editingUserId=null;}
+
+// 修改角色
+let _editingRoleUserId=null;
+function editRolePrompt(id,name,currentRole){
+  _editingRoleUserId=id;
+  document.getElementById('er-username').textContent=`帳號：${name}`;
+  document.getElementById('er-role').value=currentRole||'user';
+  document.getElementById('er-err').textContent='';
+  document.getElementById('edit-role-modal').classList.add('show');
+}
+function closeEditRoleModal(){document.getElementById('edit-role-modal').classList.remove('show');_editingRoleUserId=null;}
+async function submitEditRole(){
+  const role=document.getElementById('er-role').value;
+  const errEl=document.getElementById('er-err');
+  const{error}=await sb.from('profiles').update({role}).eq('id',_editingRoleUserId);
+  if(error){errEl.textContent='❌ 更新失敗：'+error.message;return;}
+  closeEditRoleModal();
+  toast('角色已更新','success');
+  await renderUsersTable();await renderAdminUsers();
+}
 async function submitEditPw(){
   const pw=document.getElementById('ep-pw').value;
   const errEl=document.getElementById('ep-err');
