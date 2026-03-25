@@ -261,7 +261,8 @@ tr:hover td{background:rgba(79,156,249,.04);}
 
 <!-- LOGIN -->
 <div id="login-screen">
-  <div class="login-box">
+  <!-- 登入表單 -->
+  <div class="login-box" id="login-box">
     <div class="login-logo">
       <div class="login-logo-icon">🏭</div>
       <div><h1>倉儲批發系統</h1><p>WAREHOUSE · POS · MANAGEMENT</p></div>
@@ -270,7 +271,30 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <div class="lf"><label>密碼</label><input type="password" id="login-pw" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="login-btn" onclick="doLogin()">🔐 登入</button>
     <div class="login-err" id="login-err"></div>
-    <div class="login-hint" id="login-hint"></div>
+    <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text3);">
+      還沒有帳號？
+      <span onclick="showRegister()" style="color:var(--accent);cursor:pointer;font-weight:500;">點此註冊</span>
+    </div>
+  </div>
+
+  <!-- 註冊表單 -->
+  <div class="login-box" id="register-box" style="display:none;">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏭</div>
+      <div><h1>註冊帳號</h1><p>WAREHOUSE · POS · MANAGEMENT</p></div>
+    </div>
+    <div class="lf"><label>帳號名稱</label><input type="text" id="reg-username" placeholder="請輸入帳號名稱" onkeydown="if(event.key==='Enter')document.getElementById('reg-pw').focus()"></div>
+    <div class="lf"><label>密碼 <span style="color:var(--text3);font-size:11px;">（至少 6 個字元）</span></label><input type="password" id="reg-pw" placeholder="請輸入密碼" onkeydown="if(event.key==='Enter')document.getElementById('reg-pw2').focus()"></div>
+    <div class="lf"><label>確認密碼</label><input type="password" id="reg-pw2" placeholder="再輸入一次密碼" onkeydown="if(event.key==='Enter')doRegister()"></div>
+    <button class="login-btn" onclick="doRegister()">📝 註冊</button>
+    <div class="login-err" id="reg-err"></div>
+    <div style="text-align:center;margin-top:14px;font-size:13px;color:var(--text3);">
+      已有帳號？
+      <span onclick="showLogin()" style="color:var(--accent);cursor:pointer;font-weight:500;">返回登入</span>
+    </div>
+    <div style="background:rgba(79,156,249,.08);border:1px solid rgba(79,156,249,.2);border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:var(--text2);text-align:center;">
+      👁 註冊後自動獲得「訪客」權限<br>可建立到貨單，其他功能由管理員開通
+    </div>
   </div>
 </div>
 
@@ -1002,6 +1026,51 @@ const can={
 // LOGIN — Supabase Auth 版本
 // 帳號名稱轉成虛擬 email（使用者介面不變）
 function nameToEmail(name){return name.trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_')+'@warehouse.local';}
+
+function showRegister(){
+  document.getElementById('login-box').style.display='none';
+  document.getElementById('register-box').style.display='block';
+  document.getElementById('reg-username').value='';
+  document.getElementById('reg-pw').value='';
+  document.getElementById('reg-pw2').value='';
+  document.getElementById('reg-err').textContent='';
+  setTimeout(()=>document.getElementById('reg-username').focus(),100);
+}
+function showLogin(){
+  document.getElementById('register-box').style.display='none';
+  document.getElementById('login-box').style.display='block';
+  document.getElementById('login-err').textContent='';
+}
+async function doRegister(){
+  const username=document.getElementById('reg-username').value.trim();
+  const pw=document.getElementById('reg-pw').value;
+  const pw2=document.getElementById('reg-pw2').value;
+  const errEl=document.getElementById('reg-err');
+  if(!username){errEl.textContent='❌ 請輸入帳號名稱';return;}
+  if(!pw||pw.length<6){errEl.textContent='❌ 密碼至少需要 6 個字元';return;}
+  if(pw!==pw2){errEl.textContent='❌ 兩次密碼不一致';return;}
+  errEl.textContent='建立中...';
+  const email=nameToEmail(username);
+  // 用一般 signUp 建立帳號
+  const{data,error}=await sb.auth.signUp({email,password:pw});
+  if(error){errEl.textContent='❌ 註冊失敗：'+error.message;return;}
+  if(!data.user){errEl.textContent='❌ 註冊失敗，請稍後再試';return;}
+  // 寫入 profiles，角色自動設為 guest
+  const{error:pe}=await sb.from('profiles').insert({id:data.user.id,name:username,role:'guest'});
+  if(pe){errEl.textContent='❌ 寫入資料失敗：'+pe.message;return;}
+  errEl.style.color='var(--success)';
+  errEl.textContent='✅ 註冊成功！正在登入...';
+  // 自動登入
+  setTimeout(async()=>{
+    const{data:loginData,error:loginErr}=await sb.auth.signInWithPassword({email,password:pw});
+    if(loginErr){showLogin();return;}
+    currentUser={id:loginData.user.id,name:username,role:'guest'};
+    document.getElementById('login-screen').style.display='none';
+    document.getElementById('main-app').style.display='block';
+    showLogin();
+    await onAfterLogin();
+  },1000);
+}
 
 function initLoginScreen(){
   document.getElementById("login-username").value="";
