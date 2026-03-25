@@ -1023,8 +1023,14 @@ async function doLogin(){
     return;
   }
   // 從 profiles 取得角色與顯示名稱
-  const{data:profile}=await sb.from('profiles').select('name,role').eq('id',data.user.id).single();
-  currentUser={id:data.user.id, name:profile?.name||username, role:profile?.role||'user'};
+  const{data:profile, error:profileError}=await sb.from('profiles').select('name,role').eq('id',data.user.id).single();
+  console.log('Profile fetch:', profile, profileError);
+  if(profileError||!profile){
+    document.getElementById("login-err").textContent=`⚠️ 讀取角色失敗：${profileError?.message||'找不到 profile'}（user id: ${data.user.id}）`;
+    await sb.auth.signOut();
+    return;
+  }
+  currentUser={id:data.user.id, name:profile.name, role:profile.role};
   const unEl=document.getElementById("login-username");
   const pwEl=document.getElementById("login-pw");
   if(unEl){unEl.value="";unEl.blur();}
