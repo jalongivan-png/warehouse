@@ -678,12 +678,12 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div style="margin-bottom:20px;"><h2 style="font-size:18px;font-weight:700;">⚙️ 系統管理</h2></div>
 
   <!-- 安全性提醒 -->
-  <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px;">
-    <div style="font-size:13px;font-weight:600;color:var(--danger);margin-bottom:8px;">🔒 安全性提醒（請管理員注意）</div>
+  <div style="background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.3);border-radius:12px;padding:14px 18px;margin-bottom:20px;">
+    <div style="font-size:13px;font-weight:600;color:var(--success);margin-bottom:8px;">✅ 已使用 Supabase Auth 認證</div>
     <ul style="font-size:12px;color:var(--text2);line-height:2;padding-left:16px;margin:0;">
-      <li>目前密碼以<strong style="color:var(--warning)">明文</strong>儲存於資料庫，強烈建議改用 <a href="https://supabase.com/docs/guides/auth" target="_blank" style="color:var(--accent);">Supabase Auth</a> 取代現有登入機制。</li>
-      <li>Anon Key 寫死在前端原始碼中，請務必在 Supabase 後台為每個資料表設定 <a href="https://supabase.com/docs/guides/database/postgres/row-level-security" target="_blank" style="color:var(--accent);">Row Level Security（RLS）</a> 規則。</li>
-      <li>所有角色權限僅在前端判斷，無 RLS 保護時任何人皆可繞過。</li>
+      <li>密碼由 Supabase Auth 管理，不再以明文儲存於資料庫。</li>
+      <li>Session 由 Supabase 自動維護，重新整理頁面不需重新登入。</li>
+      <li>建議在 Supabase 後台為 entries、batches 等資料表加上 <a href="https://supabase.com/docs/guides/database/postgres/row-level-security" target="_blank" style="color:var(--accent);">RLS 規則</a>，以獲得完整保護。</li>
     </ul>
   </div>
 
@@ -708,6 +708,11 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <div class="form-grid">
       <div class="form-group full"><label>Supabase URL</label><input type="text" id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
       <div class="form-group full"><label>Supabase Anon Key</label><input type="text" id="cfg-key" placeholder="sb_publishable_..."></div>
+      <div class="form-group full">
+        <label>Supabase Service Role Key <span style="color:var(--warning);font-size:11px;">（管理員用，可新增/刪除/改密碼）</span></label>
+        <input type="password" id="cfg-service-key" placeholder="eyJhbGciOiJIUzI1NiIs...">
+        <p style="font-size:11px;color:var(--text3);margin-top:4px;">到 Supabase → Settings → API → service_role 複製</p>
+      </div>
     </div>
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSupabaseConfig()">💾 儲存設定</button></div>
     <p style="font-size:12px;color:var(--text3);margin-top:10px;">⚠️ 修改後需重新整理頁面才生效。設定儲存於本機 localStorage。</p>
@@ -878,7 +883,7 @@ CREATE TABLE IF NOT EXISTS delete_logs (
       <label>密碼 <span style="color:var(--danger)">*</span></label>
       <input type="password" id="au-pw" placeholder="設定密碼">
     </div>
-    <p style="font-size:11px;color:var(--text3);margin-bottom:14px;">⚠️ 密碼目前以明文儲存，建議改用 Supabase Auth 以提升安全性。</p>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px;">密碼由 Supabase Auth 安全管理，最短 6 個字元。</p>
     <div id="au-err" style="color:var(--danger);font-size:13px;min-height:18px;margin-bottom:8px;"></div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeAddUserModal()">取消</button>
@@ -919,16 +924,29 @@ function getPhotoBucket(){return localStorage.getItem('sb_photo_bucket')||DEFAUL
 function saveSupabaseConfig(){
   const url=document.getElementById('cfg-url').value.trim();
   const key=document.getElementById('cfg-key').value.trim();
+  const svcKey=document.getElementById('cfg-service-key').value.trim();
   if(url)localStorage.setItem('sb_url',url);
   if(key)localStorage.setItem('sb_anon',key);
+  if(svcKey)localStorage.setItem('sb_service_key',svcKey);
+  else localStorage.removeItem('sb_service_key');
   toast('設定已儲存，請重新整理頁面','success');
 }
+function getServiceKey(){return localStorage.getItem('sb_service_key')||'';}
 const cfg=getSupabaseConfig();
 const sb=supabase.createClient(cfg.url,cfg.anon);
 
+// Admin client（用 service role key，只在需要時建立）
+function getAdminClient(){
+  const svcKey=getServiceKey();
+  if(!svcKey) return null;
+  return supabase.createClient(cfg.url, svcKey, {
+    auth:{autoRefreshToken:false, persistSession:false}
+  });
+}
+
 // STATE
 let currentUser=null,groups=[],currentGroup=null,entries=[],editingId=null,pendingPhotos=[],lastName="",dimRows=[];
-let products=[],customers=[],editingProductId=null,editingCustomerId=null,_cachedUsers=[];
+let products=[],customers=[],editingProductId=null,editingCustomerId=null;
 
 // HELPERS
 function showLoading(t="處理中..."){document.getElementById("loading-text").textContent=t;document.getElementById("loading").classList.add("show");}
@@ -960,6 +978,7 @@ function showPage(name){
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
     document.getElementById('cfg-key').value=localStorage.getItem('sb_anon')||'';
+    document.getElementById('cfg-service-key').value=localStorage.getItem('sb_service_key')||'';
     renderAdminUsers();loadDeleteLogs();loadStorageStats();
   }
 }
@@ -980,46 +999,47 @@ const can={
   isGuest:()=>currentUser&&currentUser.role==="guest",
 };
 
-// LOGIN
-let selectedLoginUser=null;
-async function loadUsers(){
-  const{data,error}=await sb.from('users').select('*').order('created_at');
-  if(error){console.error(error);return _cachedUsers;}
-  _cachedUsers=data||[];return _cachedUsers;
-}
-async function initLoginScreen(){
+// LOGIN — Supabase Auth 版本
+// 帳號名稱轉成虛擬 email（使用者介面不變）
+function nameToEmail(name){return name.trim().toLowerCase().replace(/[^a-z0-9._-]/g,'_')+'@warehouse.local';}
+
+function initLoginScreen(){
   document.getElementById("login-username").value="";
   document.getElementById("login-pw").value="";
   document.getElementById("login-err").textContent="";
-  try{await loadUsers();}catch(e){}
 }
 function selectUserBtn(){}
-function doLogin(){
+
+async function doLogin(){
   const username=document.getElementById("login-username").value.trim();
   const pw=document.getElementById("login-pw").value;
   if(!username){document.getElementById("login-err").textContent="❌ 請輸入帳號";return;}
   if(!pw){document.getElementById("login-err").textContent="❌ 請輸入密碼";return;}
-  const user=_cachedUsers.find(u=>u.name===username);
-  if(!user){document.getElementById("login-err").textContent="❌ 帳號不存在";return;}
-  if(user.pw!==pw){document.getElementById("login-err").textContent="❌ 密碼錯誤";return;}
-  currentUser={name:user.name,role:user.role};
-  localStorage.setItem('current_user', JSON.stringify(currentUser));
-  document.getElementById("login-screen").style.display="none";
-  document.getElementById("main-app").style.display="block";
+  document.getElementById("login-err").textContent="";
+  const email=nameToEmail(username);
+  const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  if(error){
+    document.getElementById("login-err").textContent="❌ 帳號或密碼錯誤";
+    return;
+  }
+  // 從 profiles 取得角色與顯示名稱
+  const{data:profile}=await sb.from('profiles').select('name,role').eq('id',data.user.id).single();
+  currentUser={id:data.user.id, name:profile?.name||username, role:profile?.role||'user'};
   const unEl=document.getElementById("login-username");
   const pwEl=document.getElementById("login-pw");
   if(unEl){unEl.value="";unEl.blur();}
   if(pwEl){pwEl.value="";pwEl.blur();}
-  document.getElementById("login-err").textContent="";
-  onAfterLogin();
+  document.getElementById("login-screen").style.display="none";
+  document.getElementById("main-app").style.display="block";
+  await onAfterLogin();
 }
-function doLogout(){
-  currentUser=null;currentGroup=null;entries=[];selectedLoginUser=null;
-  localStorage.removeItem('current_user');
+
+async function doLogout(){
+  await sb.auth.signOut();
+  currentUser=null;currentGroup=null;entries=[];
   document.getElementById("main-app").style.display="none";
   document.getElementById("login-screen").style.display="flex";
-  document.getElementById("login-username").value="";
-  document.getElementById("login-pw").value="";initLoginScreen();
+  initLoginScreen();
 }
 async function onAfterLogin(){
   document.getElementById("header-username").textContent=currentUser.name;
@@ -1047,23 +1067,27 @@ async function onAfterLogin(){
   loadDashboard();
 }
 
-// USER MANAGEMENT
-// 合併兩個重複函式為一個，傳入 targetId 決定更新哪個 DOM 元素
+// USER MANAGEMENT — Supabase Auth 版本
+async function loadProfiles(){
+  const{data,error}=await sb.from('profiles').select('id,name,role').order('created_at');
+  if(error){console.error(error);return[];}
+  return data||[];
+}
 function _buildUsersRows(users){
   return users.map(u=>`<tr><td>${u.name}</td><td>${roleBadgeHTML(u.role)}</td>
     <td><button class="btn btn-warning btn-sm" onclick="editUserPrompt('${u.id}','${u.name}')">修改密碼</button>
     ${u.role!=='admin'?`<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteUser('${u.id}','${u.name}')">刪除</button>`:""}</td></tr>`).join("");
 }
 async function renderUsersTable(){
-  const users=await loadUsers();
-  const rows=_buildUsersRows(users);
-  const el=document.getElementById("users-tbody");if(el)el.innerHTML=rows;
+  const users=await loadProfiles();
+  const el=document.getElementById("users-tbody");if(el)el.innerHTML=_buildUsersRows(users);
 }
 async function renderAdminUsers(){
-  const users=await loadUsers();
-  const rows=_buildUsersRows(users);
-  const el=document.getElementById("admin-users-tbody");if(el)el.innerHTML=rows;
+  const users=await loadProfiles();
+  const el=document.getElementById("admin-users-tbody");if(el)el.innerHTML=_buildUsersRows(users);
 }
+
+// 新增帳號 Modal
 function addUserPrompt(){
   document.getElementById('au-name').value='';
   document.getElementById('au-pw').value='';
@@ -1072,25 +1096,32 @@ function addUserPrompt(){
   document.getElementById('add-user-modal').classList.add('show');
   setTimeout(()=>document.getElementById('au-name').focus(),100);
 }
-function closeAddUserModal(){
-  document.getElementById('add-user-modal').classList.remove('show');
-}
+function closeAddUserModal(){document.getElementById('add-user-modal').classList.remove('show');}
 async function submitAddUser(){
   const name=document.getElementById('au-name').value.trim();
   const role=document.getElementById('au-role').value;
   const pw=document.getElementById('au-pw').value;
   const errEl=document.getElementById('au-err');
   if(!name){errEl.textContent='❌ 請輸入帳號名稱';return;}
-  if(!pw){errEl.textContent='❌ 請設定密碼';return;}
-  errEl.textContent='';
-  const users=await loadUsers();
-  if(users.find(u=>u.name===name)){errEl.textContent='❌ 帳號名稱已存在';return;}
-  const{error}=await sb.from('users').insert({name,role,pw});
-  if(error){errEl.textContent='❌ 新增失敗：'+error.message;return;}
+  if(!pw||pw.length<6){errEl.textContent='❌ 密碼至少需要 6 個字元';return;}
+  const admin=getAdminClient();
+  if(!admin){errEl.textContent='❌ 請先在系統管理頁設定 Service Role Key';return;}
+  errEl.textContent='正在建立帳號...';
+  const email=nameToEmail(name);
+  // 用 Admin API 建立（不寄驗證信，直接啟用）
+  const{data,error}=await admin.auth.admin.createUser({
+    email, password:pw, email_confirm:true
+  });
+  if(error){errEl.textContent='❌ 建立失敗：'+error.message;return;}
+  // 寫入 profiles（名稱 + 角色）
+  const{error:pe}=await sb.from('profiles').insert({id:data.user.id,name,role});
+  if(pe){errEl.textContent='❌ 寫入角色失敗：'+pe.message;return;}
   closeAddUserModal();
-  await renderUsersTable();await renderAdminUsers();await initLoginScreen();
-  toast('帳號「'+name+'」已新增','success');
+  await renderUsersTable();await renderAdminUsers();
+  toast('帳號「'+name+'」已建立','success');
 }
+
+// 修改密碼 Modal
 let _editingUserId=null;
 function editUserPrompt(id,name){
   _editingUserId=id;
@@ -1100,15 +1131,14 @@ function editUserPrompt(id,name){
   document.getElementById('edit-pw-modal').classList.add('show');
   setTimeout(()=>document.getElementById('ep-pw').focus(),100);
 }
-function closeEditPwModal(){
-  document.getElementById('edit-pw-modal').classList.remove('show');
-  _editingUserId=null;
-}
+function closeEditPwModal(){document.getElementById('edit-pw-modal').classList.remove('show');_editingUserId=null;}
 async function submitEditPw(){
   const pw=document.getElementById('ep-pw').value;
   const errEl=document.getElementById('ep-err');
-  if(!pw){errEl.textContent='❌ 請輸入新密碼';return;}
-  const{error}=await sb.from('users').update({pw}).eq('id',_editingUserId);
+  if(!pw||pw.length<6){errEl.textContent='❌ 密碼至少需要 6 個字元';return;}
+  const admin=getAdminClient();
+  if(!admin){errEl.textContent='❌ 請先設定 Service Role Key';return;}
+  const{error}=await admin.auth.admin.updateUserById(_editingUserId,{password:pw});
   if(error){errEl.textContent='❌ 更新失敗：'+error.message;return;}
   closeEditPwModal();
   toast('密碼已更新','success');
@@ -1125,10 +1155,12 @@ async function logDelete(table_name, record_id, record_summary){
 async function deleteUser(id,name){
   if(!can.manageUsers())return toast("無刪除權限","error");
   if(!confirm(`確定刪除帳號「${name}」？`))return;
+  const admin=getAdminClient();
+  if(!admin){toast("請先設定 Service Role Key","error");return;}
   await logDelete('users', id, `帳號：${name}`);
-  const{error}=await sb.from('users').delete().eq('id',id);
-  if(error){toast("刪除失敗","error");return;}
-  await renderUsersTable();await renderAdminUsers();await initLoginScreen();toast("帳號已刪除","info");
+  const{error}=await admin.auth.admin.deleteUser(id);
+  if(error){toast("刪除失敗："+error.message,"error");return;}
+  await renderUsersTable();await renderAdminUsers();toast("帳號已刪除","info");
 }
 
 // GROUPS
@@ -2711,32 +2743,29 @@ async function deleteBatch(id,code){
   await loadBatches();
 }
 
-// INIT
+// INIT — 改用 Supabase Auth session 恢復，不再依賴 localStorage
 document.addEventListener('DOMContentLoaded',async()=>{
-  await loadUsers();
-  // 嘗試從 localStorage 恢復登入狀態
-  const saved = localStorage.getItem('current_user');
-  if(saved){
-    try{
-      const savedUser = JSON.parse(saved);
-      // 確認帳號仍存在於資料庫
-      const match = _cachedUsers.find(u => u.name === savedUser.name);
-      if(match){
-        currentUser = {name: match.name, role: match.role};
-        document.getElementById("login-screen").style.display="none";
-        document.getElementById("main-app").style.display="block";
-        await onAfterLogin();
-        setupEnterNavigation();
-        const sinp=document.getElementById('new-supplier-input');
-        if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
-        return;
-      }
-    }catch(e){ localStorage.removeItem('current_user'); }
+  function _setupUI(){
+    setupEnterNavigation();
+    const sinp=document.getElementById('new-supplier-input');
+    if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
   }
-  await initLoginScreen();
-  setupEnterNavigation();
-  const sinp=document.getElementById('new-supplier-input');
-  if(sinp)sinp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addSupplier();}});
+  // 嘗試恢復既有 session（Supabase 自動管理 token，不需要 localStorage）
+  const{data:{session}}=await sb.auth.getSession();
+  if(session){
+    // 從 profiles 取得角色與顯示名稱
+    const{data:profile}=await sb.from('profiles').select('name,role').eq('id',session.user.id).single();
+    if(profile){
+      currentUser={id:session.user.id, name:profile.name, role:profile.role};
+      document.getElementById("login-screen").style.display="none";
+      document.getElementById("main-app").style.display="block";
+      await onAfterLogin();
+      _setupUI();
+      return;
+    }
+  }
+  initLoginScreen();
+  _setupUI();
 });
 </script>
 </body>
