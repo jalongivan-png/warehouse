@@ -635,6 +635,22 @@ tr:hover td{background:rgba(79,156,249,.04);}
         <label>📝 外場備註（異常、缺件等）</label>
         <textarea id="arr-notes" placeholder="如有異常請填寫..." style="min-height:70px;"></textarea>
       </div>
+      <div class="form-group full">
+        <label>📷 到貨照片</label>
+        <!-- 縮圖預覽 -->
+        <div id="arr-photo-thumbs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;"></div>
+        <!-- 上傳按鈕 -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <label style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:white;border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+            📷 拍照
+            <input type="file" accept="image/*" capture="environment" onchange="arrHandlePhoto(event)" style="display:none;">
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:6px;background:rgba(79,156,249,.12);border:1px solid rgba(79,156,249,.3);color:var(--accent);border-radius:8px;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:500;">
+            🖼 選擇圖片
+            <input type="file" accept="image/*" multiple onchange="arrHandlePhoto(event)" style="display:none;">
+          </label>
+        </div>
+      </div>
     </div>
     <div class="btn-row">
       <button class="btn btn-ghost" onclick="closeArrivalModal()">取消</button>
@@ -2290,9 +2306,36 @@ function openArrivalModal(id){
   const now=new Date();const p=n=>String(n).padStart(2,'0');
   document.getElementById('arr-time').value=`${now.getFullYear()}-${p(now.getMonth()+1)}-${p(now.getDate())}T${p(now.getHours())}:${p(now.getMinutes())}`;
   document.getElementById('arr-notes').value='';
+  arrPendingPhotos=[];
+  renderArrThumbs();
   document.getElementById('arrival-modal').classList.add('show');
 }
-function closeArrivalModal(){document.getElementById('arrival-modal').classList.remove('show');arrivingDeliveryId=null;}
+function closeArrivalModal(){
+  document.getElementById('arrival-modal').classList.remove('show');
+  arrivingDeliveryId=null;
+  arrPendingPhotos=[];
+  renderArrThumbs();
+}
+
+// 到貨回報照片
+let arrPendingPhotos=[];
+function arrHandlePhoto(e){
+  const files=Array.from(e.target.files||[]).filter(f=>f.type.startsWith('image/'));
+  arrPendingPhotos.push(...files);
+  renderArrThumbs();
+  e.target.value='';
+}
+function removeArrPhoto(i){arrPendingPhotos.splice(i,1);renderArrThumbs();}
+function renderArrThumbs(){
+  const el=document.getElementById('arr-photo-thumbs');if(!el)return;
+  el.innerHTML=arrPendingPhotos.map((f,i)=>{
+    const src=URL.createObjectURL(f);
+    return `<div style="position:relative;width:60px;height:60px;border-radius:6px;overflow:hidden;border:1px solid var(--border);">
+      <img src="${src}" style="width:100%;height:100%;object-fit:contain;">
+      <button onclick="removeArrPhoto(${i})" style="position:absolute;top:2px;right:2px;background:rgba(239,68,68,.85);border:none;color:white;width:16px;height:16px;border-radius:50%;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;">✕</button>
+    </div>`;
+  }).join('');
+}
 
 async function submitArrival(){
   if(!arrivingDeliveryId)return;
@@ -2300,12 +2343,32 @@ async function submitArrival(){
   const arrived_at=document.getElementById('arr-time').value.replace('T',' ')||new Date().toISOString();
   const field_notes=document.getElementById('arr-notes').value.trim()||null;
   showLoading("回報中...");
-  const{error}=await sb.from('deliveries').update({
-    status:'arrived',arrived_at,actual_count,field_notes,reporter:currentUser.name
-  }).eq('id',arrivingDeliveryId);
+  // 上傳照片
+  let arrival_photos=[];
+  if(arrPendingPhotos.length>0){
+    document.getElementById('loading-text').textContent='上傳照片中...';
+    for(let i=0;i<arrPendingPhotos.length;i++){
+      let file=arrPendingPhotos[i];
+      file=await compressImage(file);
+      const rand=Math.random().toString(36).slice(2,8);
+      const ext=file.type.includes('png')?'png':'jpg';
+      const path=`arrivals/${arrivingDeliveryId}/${Date.now()}-${rand}.${ext}`;
+      const{error:ue}=await sb.storage.from(PL_BUCKET).upload(path,file,{cacheControl:'3600',upsert:true,contentType:file.type});
+      if(!ue){
+        const{data}=sb.storage.from(PL_BUCKET).getPublicUrl(path);
+        if(data?.publicUrl) arrival_photos.push(data.publicUrl);
+      }
+    }
+  }
+  const updateData={
+    status:'arrived', arrived_at, actual_count, field_notes, reporter:currentUser.name
+  };
+  if(arrival_photos.length>0) updateData.arrival_photos=arrival_photos;
+  const{error}=await sb.from('deliveries').update(updateData).eq('id',arrivingDeliveryId);
   hideLoading();
   if(error){toast("回報失敗："+error.message,"error");return;}
-  toast("✅ 到貨已回報！","success");closeArrivalModal();await loadDelivery();
+  toast(`✅ 到貨已回報！${arrival_photos.length>0?` 已上傳 ${arrival_photos.length} 張照片`:''}`,"success");
+  closeArrivalModal();await loadDelivery();
 }
 
 // STORAGE STATS
