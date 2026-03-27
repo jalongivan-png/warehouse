@@ -2170,11 +2170,49 @@ function renderDelivery(){
       <td style="white-space:nowrap;">
         ${isPending && !can.isGuest() ? `<button class="btn btn-success btn-sm" onclick="openArrivalModal('${d.id}')">✅ 到貨</button>` : ''}
         ${isPending && (!can.isGuest() || d.created_by===currentUser?.name) ? `<button class="btn btn-warning btn-sm" style="margin-left:4px;" onclick="openDeliveryModal('${d.id}')">編輯</button>` : ''}
+        ${!isPending && !can.isGuest() ? `<button class="btn btn-primary btn-sm" style="margin-left:4px;" onclick="convertToInbound('${d.id}')">📦 轉入進倉</button>` : ''}
         ${canCreate && !can.isGuest() ? `<button class="btn btn-danger btn-sm" style="margin-left:4px;" onclick="deleteDelivery('${d.id}','${(d.code||'').replace(/'/g,"\\'")}')">刪除</button>` : ''}
       </td>
     </tr>`;
   }).join('')}
   </tbody></table>`;
+}
+
+function convertToInbound(id){
+  const d=deliveries.find(x=>x.id===id);
+  if(!d)return;
+  // 切換到進貨登記頁面
+  showPage('inbound');
+  // 帶入到貨單資料
+  document.getElementById('f-name').value=d.description||d.code||'';
+  document.getElementById('f-supplier').value=d.supplier||'';
+  document.getElementById('f-count').value=d.actual_count||d.expected_count||'';
+  document.getElementById('f-notes').value=
+    `來源：到貨單 ${d.code}${d.field_notes?' | 外場備註：'+d.field_notes:''}${d.office_notes?' | 辦公室備註：'+d.office_notes:''}`;
+  // 日期設為到貨時間
+  if(d.arrived_at){
+    const dt=new Date(d.arrived_at);
+    const pad=n=>String(n).padStart(2,'0');
+    document.getElementById('f-datetime').value=
+      `${dt.getFullYear()}-${pad(dt.getMonth()+1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+  }
+  // 顯示提示
+  const summary=document.getElementById('save-summary');
+  if(summary){
+    summary.style.display='block';
+    summary.innerHTML=`
+      <div style="background:rgba(79,156,249,.08);border:2px solid var(--accent);border-radius:14px;padding:16px 20px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+          <span style="font-size:22px;">📦</span>
+          <div style="font-size:15px;font-weight:700;color:var(--accent);">已從到貨單「${d.code}」帶入資料</div>
+        </div>
+        <div style="font-size:13px;color:var(--text2);">請補充重量、尺寸等資料後按「📌 建立記錄」儲存</div>
+        <button onclick="this.parentElement.parentElement.style.display='none'"
+          style="margin-top:10px;background:transparent;border:1px solid var(--border);color:var(--text3);border-radius:6px;padding:4px 12px;cursor:pointer;font-size:12px;">✕ 關閉提示</button>
+      </div>`;
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+  toast(`已帶入到貨單「${d.code}」的資料，請補充後儲存`,'info');
 }
 
 function openDeliveryModal(id=null){
