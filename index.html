@@ -748,14 +748,27 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <div class="form-grid">
       <div class="form-group full"><label>Supabase URL</label><input type="text" id="cfg-url" placeholder="https://xxxx.supabase.co"></div>
       <div class="form-group full"><label>Supabase Anon Key</label><input type="text" id="cfg-key" placeholder="sb_publishable_..."></div>
-      <div class="form-group full">
-        <label>Supabase Service Role Key <span style="color:var(--warning);font-size:11px;">（管理員用，可新增/刪除/改密碼）</span></label>
-        <input type="password" id="cfg-service-key" placeholder="eyJhbGciOiJIUzI1NiIs...">
-        <p style="font-size:11px;color:var(--text3);margin-top:4px;">到 Supabase → Settings → API → service_role 複製</p>
-      </div>
     </div>
     <div class="btn-row"><button class="btn btn-primary" onclick="saveSupabaseConfig()">💾 儲存設定</button></div>
     <p style="font-size:12px;color:var(--text3);margin-top:10px;">⚠️ 修改後需重新整理頁面才生效。設定儲存於本機 localStorage。</p>
+  </div>
+
+  <!-- Service Role Key 臨時輸入（不儲存） -->
+  <div class="card">
+    <div class="card-title"><span class="bar bar-red"></span>🔑 管理員操作金鑰</div>
+    <div style="background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.15);border-radius:10px;padding:14px;margin-bottom:14px;">
+      <div style="font-size:13px;color:var(--text2);margin-bottom:4px;">⚠️ Service Role Key <span style="color:var(--warning);font-weight:600;">不會儲存</span>，只在本次操作有效，關閉頁面即清除</div>
+      <div style="font-size:12px;color:var(--text3);">需要新增帳號、修改密碼、刪除帳號時才需要輸入</div>
+    </div>
+    <div class="form-group">
+      <label>Service Role Key <span style="color:var(--text3);font-size:11px;">（到 Supabase → Settings → API Keys → Secret keys 複製）</span></label>
+      <div style="display:flex;gap:8px;">
+        <input type="password" id="cfg-service-key" placeholder="sb_secret_..." style="flex:1;">
+        <button class="btn btn-primary btn-sm" onclick="activateServiceKey()">✅ 套用</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearServiceKey()">🗑 清除</button>
+      </div>
+    </div>
+    <div id="service-key-status" style="font-size:12px;margin-top:8px;color:var(--text3);">尚未輸入</div>
   </div>
   <div class="card">
     <div class="card-title"><span class="bar bar-blue"></span>📋 Supabase 建表 SQL</div>
@@ -986,16 +999,32 @@ function getPhotoBucket(){return localStorage.getItem('sb_photo_bucket')||DEFAUL
 function saveSupabaseConfig(){
   const url=document.getElementById('cfg-url').value.trim();
   const key=document.getElementById('cfg-key').value.trim();
-  const svcKey=document.getElementById('cfg-service-key').value.trim();
   if(url)localStorage.setItem('sb_url',url);
   if(key)localStorage.setItem('sb_anon',key);
-  if(svcKey)localStorage.setItem('sb_service_key',svcKey);
-  else localStorage.removeItem('sb_service_key');
   toast('設定已儲存，請重新整理頁面','success');
 }
-function getServiceKey(){return localStorage.getItem('sb_service_key')||'';}
+
+// Service Role Key 只存在記憶體，不存 localStorage
+let _sessionServiceKey='';
+function getServiceKey(){return _sessionServiceKey;}
+function activateServiceKey(){
+  const key=document.getElementById('cfg-service-key').value.trim();
+  if(!key){toast('請輸入 Service Role Key','error');return;}
+  _sessionServiceKey=key;
+  document.getElementById('cfg-service-key').value=''; // 輸入後立即清除顯示
+  document.getElementById('service-key-status').innerHTML='<span style="color:var(--success);">✅ 已套用（本次操作有效，重新整理後失效）</span>';
+  toast('Service Role Key 已套用','success');
+}
+function clearServiceKey(){
+  _sessionServiceKey='';
+  document.getElementById('cfg-service-key').value='';
+  document.getElementById('service-key-status').innerHTML='<span style="color:var(--text3);">已清除</span>';
+  toast('已清除','info');
+}
 const cfg=getSupabaseConfig();
 const sb=supabase.createClient(cfg.url,cfg.anon);
+// 清除舊版存在 localStorage 的 service key（安全性修正）
+localStorage.removeItem('sb_service_key');
 
 // Admin client（用 service role key，只在需要時建立）
 function getAdminClient(){
@@ -1040,7 +1069,11 @@ function showPage(name){
   if(name==='admin'){
     document.getElementById('cfg-url').value=localStorage.getItem('sb_url')||'';
     document.getElementById('cfg-key').value=localStorage.getItem('sb_anon')||'';
-    document.getElementById('cfg-service-key').value=localStorage.getItem('sb_service_key')||'';
+    // 顯示目前 key 狀態
+    const statusEl=document.getElementById('service-key-status');
+    if(statusEl) statusEl.innerHTML=_sessionServiceKey
+      ? '<span style="color:var(--success);">✅ 已套用（本次操作有效）</span>'
+      : '<span style="color:var(--text3);">尚未輸入</span>';
     renderAdminUsers();loadDeleteLogs();loadStorageStats();
   }
 }
