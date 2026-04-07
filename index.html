@@ -194,7 +194,7 @@ tr:hover td{background:rgba(79,156,249,.04);}
   .nav-logo-text h1{font-size:12px;}
   .nav-logo-text p{display:none;}
   .nav-tabs{order:3;width:100%;border-top:1px solid var(--border);overflow-x:auto;gap:0;}
-  .nav-tab{padding:10px 13px;font-size:19px;}
+  .nav-tab{padding:10px 13px;font-size:24px;}
   .nav-tabs .nav-tab .tab-lbl{display:none;}
   .nav-right{margin-left:auto;padding:6px 0;gap:6px;}
   .user-pill{padding:3px 8px 3px 4px;}
@@ -341,7 +341,6 @@ tr:hover td{background:rgba(79,156,249,.04);}
     <button class="nav-tab" onclick="showPage('inbound')" data-page="inbound">📦 <span class="tab-lbl">進貨登記</span></button>
     <button class="nav-tab" onclick="showPage('records')" data-page="records">📋 <span class="tab-lbl">進倉記錄</span></button>
     <button class="nav-tab" onclick="showPage('batches')" data-page="batches">🗂 <span class="tab-lbl">批次管理</span></button>
-    <button class="nav-tab" onclick="showPage('inventory')" data-page="inventory">🗃 <span class="tab-lbl">庫存管理</span></button>
     <button class="nav-tab" onclick="showPage('customers')" data-page="customers">👥 <span class="tab-lbl">客戶管理</span></button>
     <button class="nav-tab" onclick="showPage('reports')" data-page="reports">📈 <span class="tab-lbl">報表統計</span></button>
     <button class="nav-tab" onclick="showPage('delivery')" data-page="delivery">🚚 <span class="tab-lbl">到貨回報</span></button>
@@ -363,13 +362,9 @@ tr:hover td{background:rgba(79,156,249,.04);}
   <div class="stats-row">
     <div class="stat-card"><div class="stat-icon si-blue">📦</div><div><div class="stat-num mono" id="ds-inbound">—</div><div class="stat-label">本月進貨筆數</div></div></div>
     <div class="stat-card"><div class="stat-icon si-green">🗃</div><div><div class="stat-num mono" id="ds-products">—</div><div class="stat-label">商品種類</div></div></div>
-    <div class="stat-card"><div class="stat-icon si-red">⚠️</div><div><div class="stat-num mono" id="ds-lowstock">—</div><div class="stat-label">庫存不足品項</div></div></div>
     <div class="stat-card"><div class="stat-icon si-cyan">👥</div><div><div class="stat-num mono" id="ds-customers">—</div><div class="stat-label">客戶數</div></div></div>
   </div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-    <div class="card"><div class="card-title"><span class="bar bar-blue"></span>最近進貨記錄</div><div id="dash-recent"></div></div>
-    <div class="card"><div class="card-title"><span class="bar bar-red"></span>庫存不足警示</div><div id="dash-lowstock"></div></div>
-  </div>
+  <div class="card fade-in"><div class="card-title"><span class="bar bar-blue"></span>最近進貨記錄</div><div id="dash-recent"></div></div>
 </div>
 
 <!-- PAGE: INBOUND -->
@@ -549,17 +544,6 @@ tr:hover td{background:rgba(79,156,249,.04);}
 </div>
 
 <!-- PAGE: INVENTORY -->
-<div class="page" id="page-inventory">
-  <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
-    <div><h2 style="font-size:18px;font-weight:700;">🗃 庫存管理</h2><p style="color:var(--text2);font-size:13px;margin-top:4px;">管理商品庫存數量與低庫存警示</p></div>
-    <div style="display:flex;gap:8px;">
-      <input class="search-input" type="text" id="inv-search" placeholder="🔍 搜尋商品..." oninput="renderInventory()">
-      <button class="btn btn-primary btn-sm" onclick="openProductModal()">＋ 新增商品</button>
-    </div>
-  </div>
-  <div class="card"><div class="table-wrap" id="inventory-table"></div></div>
-</div>
-
 <!-- PAGE: CUSTOMERS -->
 <div class="page" id="page-customers">
   <div style="display:flex;gap:12px;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;">
@@ -1235,7 +1219,7 @@ async function onAfterLogin(){
   document.getElementById("nav-admin").style.display=can.manageUsers()?"":"none";
   document.getElementById("btn-add-delivery").style.display="";
   // 訪客：只顯示到貨回報頁籤
-  const guestOnly=['dashboard','inbound','records','batches','inventory','customers','reports','photolibrary'];
+  const guestOnly=['dashboard','inbound','records','batches','customers','reports','photolibrary'];
   guestOnly.forEach(p=>{
     const tab=document.querySelector(`[data-page="${p}"]`);
     if(tab) tab.style.display=can.isGuest()?'none':'';
